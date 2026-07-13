@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: projeto-encontros-postgres
+    environment:
+      POSTGRES_DB: projeto_encontros
+      POSTGRES_USER: projeto_encontros
+      POSTGRES_PASSWORD: projeto_encontros_dev
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - projeto_encontros_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U projeto_encontros -d projeto_encontros"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  projeto_encontros_postgres_data:
