@@ -1,15 +1,11 @@
 [
   {
-    "Name": "api + aplicação",
+    "Name": "api",
     "Projects": [
       {
         "Path": "src\\ProjetoEncontros.Api\\ProjetoEncontros.Api.csproj",
         "Action": "Start",
         "DebugTarget": "http"
-      },
-      {
-        "Path": "src\\ProjetoEncontros.Aplicativo\\ProjetoEncontros.Aplicativo.csproj",
-        "Action": "Start"
       }
     ]
   }
