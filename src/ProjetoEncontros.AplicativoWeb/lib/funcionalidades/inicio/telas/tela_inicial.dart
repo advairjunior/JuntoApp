@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/acessibilidade/identificadores_semanticos.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/cabecalho_da_pagina.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/cartao_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/conteudo_responsivo.dart';
@@ -162,10 +163,13 @@ class _ConteudoDaPagina extends StatelessWidget {
                 quantidadeNaoLida: quantidadeDeNotificacoesNaoLidas,
                 aoAbrir: aoAbrirNotificacoes,
               ),
-              IconButton.filled(
-                onPressed: () => context.push('/encontros/novo'),
-                tooltip: 'Criar encontro',
-                icon: const Icon(Icons.add_rounded),
+              Semantics(
+                identifier: IdentificadoresSemanticos.inicioCriarEncontro,
+                child: IconButton.filled(
+                  onPressed: () => context.push('/encontros/novo'),
+                  tooltip: 'Criar encontro',
+                  icon: const Icon(Icons.add_rounded),
+                ),
               ),
             ],
           ),

@@ -121,6 +121,11 @@ public sealed class ParticipanteDoEncontro : Entidade
 
     public void Remova(DateTimeOffset removidoEm)
     {
+        if (Situacao == SituacaoDoParticipanteDoEncontro.Removido)
+        {
+            return;
+        }
+
         if (EhOrganizador)
         {
             throw new ExcecaoDeDominioException("O organizador do encontro não pode ser removido nesta versão.");

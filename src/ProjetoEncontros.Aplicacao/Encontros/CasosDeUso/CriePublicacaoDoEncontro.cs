@@ -20,16 +20,35 @@ public sealed class CriePublicacaoDoEncontro(
         ValideIdentificadores(comando);
         ParticipanteDoEncontro participante = await ObtenhaParticipanteAsync(comando, cancellationToken);
         Usuario autor = await ObtenhaAutorAsync(participante.IdentificadorDoUsuario, cancellationToken);
+        Guid identificadorDaOperacao = comando.IdentificadorDaOperacao == Guid.Empty
+            ? Guid.NewGuid()
+            : comando.IdentificadorDaOperacao;
         PublicacaoDoEncontro publicacao = PublicacaoDoEncontro.Crie(
-            Guid.NewGuid(),
+            identificadorDaOperacao,
             comando.IdentificadorDoEncontro,
             comando.IdentificadorDoUsuarioAutor,
             comando.Texto,
             relogio.Agora);
+        PublicacaoDoEncontro? publicacaoExistente = await repositorioDeEncontros.ObtenhaPublicacaoAsync(
+            identificadorDaOperacao,
+            cancellationToken);
+
+        if (publicacaoExistente is not null)
+        {
+            GarantaMesmaOperacao(publicacaoExistente, publicacao);
+            return CrieResposta(publicacaoExistente, autor);
+        }
 
         await repositorioDeEncontros.AdicionePublicacaoAsync(publicacao, cancellationToken);
         await unidadeDeTrabalho.SalveAlteracoesAsync(cancellationToken);
 
+        return CrieResposta(publicacao, autor);
+    }
+
+    private static PublicacaoDoEncontroResposta CrieResposta(
+        PublicacaoDoEncontro publicacao,
+        Usuario autor)
+    {
         return new(
             publicacao.Identificador,
             publicacao.IdentificadorDoEncontro,
@@ -44,6 +63,22 @@ public sealed class CriePublicacaoDoEncontro(
             publicacao.PublicadoEm,
             publicacao.EhAtualizacaoDoSistema,
             true);
+    }
+
+    private static void GarantaMesmaOperacao(
+        PublicacaoDoEncontro publicacaoExistente,
+        PublicacaoDoEncontro publicacaoSolicitada)
+    {
+        if (publicacaoExistente.IdentificadorDoEncontro != publicacaoSolicitada.IdentificadorDoEncontro ||
+            publicacaoExistente.IdentificadorDoUsuarioAutor != publicacaoSolicitada.IdentificadorDoUsuarioAutor ||
+            !string.Equals(publicacaoExistente.Texto, publicacaoSolicitada.Texto, StringComparison.Ordinal) ||
+            publicacaoExistente.TemMidia ||
+            publicacaoExistente.EhAtualizacaoDoSistema ||
+            publicacaoExistente.EstaRemovida)
+        {
+            throw new ExcecaoDeAplicacaoException(
+                "A chave de idempotencia ja foi utilizada em outra publicacao.");
+        }
     }
 
     private async Task<ParticipanteDoEncontro> ObtenhaParticipanteAsync(

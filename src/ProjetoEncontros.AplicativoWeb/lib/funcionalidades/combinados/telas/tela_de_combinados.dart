@@ -10,6 +10,7 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/cores_do_apl
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/combinados/dados/repositorio_de_combinados.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/combinados/modelos/item_do_encontro.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/comunicacao/identificador_da_operacao.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/dados/repositorio_de_encontros.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/encontro_detalhado.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/participante_do_encontro.dart';
@@ -140,6 +141,8 @@ class TelaDeCombinados extends ConsumerWidget {
   }) async {
     String descricao = item?.descricao ?? '';
     String responsavel = item?.identificadorDoUsuarioResponsavel ?? '';
+    String? identificadorDaOperacao;
+    String? dadosDaOperacao;
     bool? alterou = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -160,9 +163,18 @@ class TelaDeCombinados extends ConsumerWidget {
 
               try {
                 if (item == null) {
+                  String dadosAtuaisDaOperacao = '$texto|$responsavel';
+
+                  if (identificadorDaOperacao == null ||
+                      dadosDaOperacao != dadosAtuaisDaOperacao) {
+                    identificadorDaOperacao = crieIdentificadorDaOperacao();
+                    dadosDaOperacao = dadosAtuaisDaOperacao;
+                  }
+
                   await ref.read(provedorDoRepositorioDeCombinados).crieAsync(
                         identificadorDoEncontro: identificadorDoEncontro,
                         descricao: texto,
+                        identificadorDaOperacao: identificadorDaOperacao!,
                         identificadorDoResponsavel:
                             responsavel.isEmpty ? null : responsavel,
                       );

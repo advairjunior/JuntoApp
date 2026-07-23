@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/erros/excecao_da_api.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/comunicacao/identificador_da_operacao.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/dados/repositorio_de_encontros.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/encontro_detalhado.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/servicos/seletor_de_imagem.dart';
@@ -39,6 +40,8 @@ class ControladorDosMomentosDoEncontro
   final IRepositorioDeEncontros _repositorioDeEncontros;
   final IRepositorioDePublicacoesDoEncontro _repositorioDePublicacoes;
   final IRepositorioDeMemoriasDoEncontro _repositorioDeMemorias;
+  String? _identificadorDaOperacaoDaPublicacaoPendente;
+  String? _textoDaPublicacaoPendente;
 
   Future<void> carregueAsync() async {
     EncontroDetalhado? encontroAtual = state.encontro;
@@ -99,12 +102,20 @@ class ControladorDosMomentosDoEncontro
       publicacoes: state.publicacoes,
       estaPublicando: true,
     );
+    if (_identificadorDaOperacaoDaPublicacaoPendente == null ||
+        _textoDaPublicacaoPendente != textoNormalizado) {
+      _identificadorDaOperacaoDaPublicacaoPendente =
+          crieIdentificadorDaOperacao();
+      _textoDaPublicacaoPendente = textoNormalizado;
+    }
 
     try {
       PublicacaoDoEncontro publicacao =
           await _repositorioDePublicacoes.publiqueAsync(
         identificadorDoEncontro: _identificadorDoEncontro,
         texto: textoNormalizado,
+        identificadorDaOperacao:
+            _identificadorDaOperacaoDaPublicacaoPendente!,
       );
       List<PublicacaoDoEncontro> publicacoes = <PublicacaoDoEncontro>[
         ...state.publicacoes.where(
@@ -119,6 +130,8 @@ class ControladorDosMomentosDoEncontro
         encontro: encontroAtual,
         publicacoes: publicacoes,
       );
+      _identificadorDaOperacaoDaPublicacaoPendente = null;
+      _textoDaPublicacaoPendente = null;
       return true;
     } on ExcecaoDaApi catch (excecao) {
       state = EstadoDosMomentosDoEncontro(

@@ -2,12 +2,14 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using ProjetoEncontros.Infraestrutura.Dados;
 
 namespace ProjetoEncontros.TestesIntegracao;
@@ -1264,6 +1266,238 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
     }
 
     [Fact]
+    public async Task RevogacaoDoParticipante_DeveBloquearTodoAcessoComSessaoAberta()
+    {
+        await fabricaDaApi.ReinicieBancoAsync();
+        HttpClient clienteOrganizador = fabricaDaApi.CrieCliente();
+        HttpClient clienteConvidado = fabricaDaApi.CrieCliente();
+
+        await CadastreUsuarioAsync(clienteOrganizador, "Organizador", "organizador.revogacao@email.com", "senha-segura");
+        await CadastreUsuarioAsync(clienteConvidado, "Convidado", "convidado.revogacao@email.com", "senha-segura");
+        RespostaDeLogin loginOrganizador = await AutentiqueUsuarioAsync(
+            clienteOrganizador,
+            "organizador.revogacao@email.com",
+            "senha-segura");
+        RespostaDeLogin loginConvidado = await AutentiqueUsuarioAsync(
+            clienteConvidado,
+            "convidado.revogacao@email.com",
+            "senha-segura");
+        clienteOrganizador.DefaultRequestHeaders.Authorization = new("Bearer", loginOrganizador.TokenDeAcesso);
+        clienteConvidado.DefaultRequestHeaders.Authorization = new("Bearer", loginConvidado.TokenDeAcesso);
+
+        RespostaDeEncontroCriado encontro = await CrieEncontroDiretoAsync(
+            clienteOrganizador,
+            "Encontro privado",
+            "Teste de revogacao",
+            "Casa do organizador",
+            new(2027, 10, 20, 19, 0, 0, TimeSpan.FromHours(-3)));
+
+        using MultipartFormDataContent corpoDaCapa = new();
+        ByteArrayContent conteudoDaCapa = new(ConteudoPngValido);
+        conteudoDaCapa.Headers.ContentType = new("image/png");
+        corpoDaCapa.Add(conteudoDaCapa, "arquivo", "capa.png");
+        HttpResponseMessage respostaDaCapa = await clienteOrganizador.PutAsync(
+            $"/api/encontros/{encontro.Identificador}/imagem-capa",
+            corpoDaCapa);
+        await GarantaStatusAsync(respostaDaCapa, HttpStatusCode.OK);
+        RespostaDeImagemDeCapaDoEncontro capa = await LeiaJsonAsync<RespostaDeImagemDeCapaDoEncontro>(respostaDaCapa);
+
+        using MultipartFormDataContent corpoDaMemoria = new();
+        ByteArrayContent conteudoDaMemoria = new(ConteudoPngValido);
+        conteudoDaMemoria.Headers.ContentType = new("image/png");
+        corpoDaMemoria.Add(conteudoDaMemoria, "arquivo", "memoria.png");
+        corpoDaMemoria.Add(new StringContent("Registro privado"), "legenda");
+        HttpResponseMessage respostaDaMemoria = await clienteOrganizador.PostAsync(
+            $"/api/encontros/{encontro.Identificador}/memorias",
+            corpoDaMemoria);
+        await GarantaStatusAsync(respostaDaMemoria, HttpStatusCode.Created);
+        RespostaDeMemoriaDoEncontro memoria = await LeiaJsonAsync<RespostaDeMemoriaDoEncontro>(respostaDaMemoria);
+        string urlDaMidia = Assert.Single(memoria.Midias).Url;
+
+        await ConvideParaEncontroDiretoAsync(
+            clienteOrganizador,
+            encontro.Identificador,
+            "convidado.revogacao@email.com");
+
+        HttpResponseMessage respostaDoItem = await clienteOrganizador.PostAsJsonAsync(
+            $"/api/encontros/{encontro.Identificador}/itens",
+            new RequisicaoDeCriacaoDeItemDoEncontro("Levar bebidas", null));
+        await GarantaStatusAsync(respostaDoItem, HttpStatusCode.Created);
+
+        RespostaDeEncontroDetalhado detalheAntesDaRevogacao = await ObtenhaEncontroDiretoAsync(
+            clienteOrganizador,
+            encontro.Identificador);
+        RespostaDeParticipanteDoEncontro organizador = detalheAntesDaRevogacao.Participantes
+            .Single(participante => participante.Papel == "Organizador");
+        RespostaDeParticipanteDoEncontro convidado = detalheAntesDaRevogacao.Participantes
+            .Single(participante => participante.Nome == "Convidado");
+
+        HttpResponseMessage respostaDeDetalheAntes = await clienteConvidado.GetAsync(
+            $"/api/encontros/{encontro.Identificador}");
+        HttpResponseMessage respostaDePublicacoesAntes = await clienteConvidado.GetAsync(
+            $"/api/encontros/{encontro.Identificador}/publicacoes");
+        HttpResponseMessage respostaDeMemoriasAntes = await clienteConvidado.GetAsync(
+            $"/api/encontros/{encontro.Identificador}/memorias");
+        HttpResponseMessage respostaDeItensAntes = await clienteConvidado.GetAsync(
+            $"/api/encontros/{encontro.Identificador}/itens");
+        HttpResponseMessage respostaDaCapaAntes = await clienteConvidado.GetAsync(capa.UrlDaImagemDeCapa);
+        HttpResponseMessage respostaDaMidiaAntes = await clienteConvidado.GetAsync(urlDaMidia);
+        await GarantaStatusAsync(respostaDeDetalheAntes, HttpStatusCode.OK);
+        await GarantaStatusAsync(respostaDePublicacoesAntes, HttpStatusCode.OK);
+        await GarantaStatusAsync(respostaDeMemoriasAntes, HttpStatusCode.OK);
+        await GarantaStatusAsync(respostaDeItensAntes, HttpStatusCode.OK);
+        await GarantaStatusAsync(respostaDaCapaAntes, HttpStatusCode.OK);
+        await GarantaStatusAsync(respostaDaMidiaAntes, HttpStatusCode.OK);
+        GarantaRespostaPrivadaSemCache(respostaDeDetalheAntes);
+        GarantaRespostaPrivadaSemCache(respostaDePublicacoesAntes);
+        GarantaRespostaPrivadaSemCache(respostaDeMemoriasAntes);
+        GarantaRespostaPrivadaSemCache(respostaDeItensAntes);
+        GarantaRespostaPrivadaSemCache(respostaDaCapaAntes);
+        GarantaRespostaPrivadaSemCache(respostaDaMidiaAntes);
+
+        HttpResponseMessage respostaDeRemocaoPeloConvidado = await clienteConvidado.DeleteAsync(
+            $"/api/encontros/{encontro.Identificador}/participantes/{organizador.IdentificadorDoUsuario}");
+        await GarantaStatusAsync(respostaDeRemocaoPeloConvidado, HttpStatusCode.Forbidden);
+
+        string rotaDeRemocao =
+            $"/api/encontros/{encontro.Identificador}/participantes/{convidado.IdentificadorDoUsuario}";
+        HttpResponseMessage respostaDeRemocao = await clienteOrganizador.DeleteAsync(rotaDeRemocao);
+        HttpResponseMessage respostaDeRemocaoRepetida = await clienteOrganizador.DeleteAsync(rotaDeRemocao);
+        await GarantaStatusAsync(respostaDeRemocao, HttpStatusCode.NoContent);
+        await GarantaStatusAsync(respostaDeRemocaoRepetida, HttpStatusCode.NoContent);
+
+        HttpResponseMessage respostaDeDetalheDepois = await clienteConvidado.GetAsync(
+            $"/api/encontros/{encontro.Identificador}");
+        HttpResponseMessage respostaDePublicacoesDepois = await clienteConvidado.GetAsync(
+            $"/api/encontros/{encontro.Identificador}/publicacoes");
+        HttpResponseMessage respostaDeMemoriasDepois = await clienteConvidado.GetAsync(
+            $"/api/encontros/{encontro.Identificador}/memorias");
+        HttpResponseMessage respostaDeNovaPublicacaoDepois = await clienteConvidado.PostAsJsonAsync(
+            $"/api/encontros/{encontro.Identificador}/publicacoes",
+            new RequisicaoDeCriacaoDePublicacao("Conteudo que nao deve ser aceito."));
+        HttpResponseMessage respostaDeItensDepois = await clienteConvidado.GetAsync(
+            $"/api/encontros/{encontro.Identificador}/itens");
+        HttpResponseMessage respostaDaCapaDepois = await clienteConvidado.GetAsync(capa.UrlDaImagemDeCapa);
+        HttpResponseMessage respostaDaMidiaDepois = await clienteConvidado.GetAsync(urlDaMidia);
+        await GarantaStatusAsync(respostaDeDetalheDepois, HttpStatusCode.Forbidden);
+        await GarantaStatusAsync(respostaDePublicacoesDepois, HttpStatusCode.Forbidden);
+        await GarantaStatusAsync(respostaDeMemoriasDepois, HttpStatusCode.Forbidden);
+        await GarantaStatusAsync(respostaDeNovaPublicacaoDepois, HttpStatusCode.Forbidden);
+        await GarantaStatusAsync(respostaDeItensDepois, HttpStatusCode.Forbidden);
+        await GarantaStatusAsync(respostaDaCapaDepois, HttpStatusCode.Forbidden);
+        await GarantaStatusAsync(respostaDaMidiaDepois, HttpStatusCode.Forbidden);
+
+        HttpResponseMessage respostaDeEncontrosDoConvidado = await clienteConvidado.GetAsync("/api/encontros");
+        await GarantaStatusAsync(respostaDeEncontrosDoConvidado, HttpStatusCode.OK);
+        List<RespostaDeEncontroResumo> encontrosDoConvidado =
+            await LeiaJsonAsync<List<RespostaDeEncontroResumo>>(respostaDeEncontrosDoConvidado);
+        Assert.DoesNotContain(encontrosDoConvidado, encontroAtual => encontroAtual.Identificador == encontro.Identificador);
+
+        RespostaDeEncontroDetalhado detalheDepoisDaRevogacao = await ObtenhaEncontroDiretoAsync(
+            clienteOrganizador,
+            encontro.Identificador);
+        Assert.DoesNotContain(
+            detalheDepoisDaRevogacao.Participantes,
+            participante => participante.IdentificadorDoUsuario == convidado.IdentificadorDoUsuario);
+    }
+
+    private static void GarantaRespostaPrivadaSemCache(HttpResponseMessage resposta)
+    {
+        string cacheControl = resposta.Headers.CacheControl?.ToString() ?? string.Empty;
+
+        Assert.Contains("private", cacheControl);
+        Assert.Contains("no-store", cacheControl);
+    }
+
+    [Fact]
+    public async Task RepeticaoDaMesmaOperacao_NaoDeveDuplicarPublicacaoNemCombinado()
+    {
+        await fabricaDaApi.ReinicieBancoAsync();
+        HttpClient cliente = fabricaDaApi.CrieCliente();
+
+        await CadastreUsuarioAsync(cliente, "Autor Resiliente", "autor.resiliente@email.com", "senha-segura");
+        RespostaDeLogin login = await AutentiqueUsuarioAsync(
+            cliente,
+            "autor.resiliente@email.com",
+            "senha-segura");
+        cliente.DefaultRequestHeaders.Authorization = new("Bearer", login.TokenDeAcesso);
+        RespostaDeEncontroCriado encontro = await CrieEncontroDiretoAsync(
+            cliente,
+            "Encontro resiliente",
+            null,
+            null,
+            new(2027, 11, 10, 19, 0, 0, TimeSpan.FromHours(-3)));
+
+        Guid operacaoDaPublicacao = Guid.NewGuid();
+        RequisicaoDeCriacaoDePublicacao publicacao = new("Mensagem enviada uma vez");
+        HttpResponseMessage primeiraRespostaDaPublicacao = await EnvieOperacaoAsync(
+            cliente,
+            $"/api/encontros/{encontro.Identificador}/publicacoes",
+            publicacao,
+            operacaoDaPublicacao);
+        HttpResponseMessage repeticaoDaPublicacao = await EnvieOperacaoAsync(
+            cliente,
+            $"/api/encontros/{encontro.Identificador}/publicacoes",
+            publicacao,
+            operacaoDaPublicacao);
+        await GarantaStatusAsync(primeiraRespostaDaPublicacao, HttpStatusCode.Created);
+        await GarantaStatusAsync(repeticaoDaPublicacao, HttpStatusCode.Created);
+        RespostaDePublicacaoDoEncontro primeiraPublicacao =
+            await LeiaJsonAsync<RespostaDePublicacaoDoEncontro>(primeiraRespostaDaPublicacao);
+        RespostaDePublicacaoDoEncontro publicacaoRepetida =
+            await LeiaJsonAsync<RespostaDePublicacaoDoEncontro>(repeticaoDaPublicacao);
+        Assert.Equal(primeiraPublicacao.Identificador, publicacaoRepetida.Identificador);
+
+        Guid operacaoDoCombinado = Guid.NewGuid();
+        RequisicaoDeCriacaoDeItemDoEncontro combinado = new("Levar refrigerante", null);
+        HttpResponseMessage primeiraRespostaDoCombinado = await EnvieOperacaoAsync(
+            cliente,
+            $"/api/encontros/{encontro.Identificador}/itens",
+            combinado,
+            operacaoDoCombinado);
+        HttpResponseMessage repeticaoDoCombinado = await EnvieOperacaoAsync(
+            cliente,
+            $"/api/encontros/{encontro.Identificador}/itens",
+            combinado,
+            operacaoDoCombinado);
+        await GarantaStatusAsync(primeiraRespostaDoCombinado, HttpStatusCode.Created);
+        await GarantaStatusAsync(repeticaoDoCombinado, HttpStatusCode.Created);
+        RespostaDeItemDoEncontro primeiroCombinado =
+            await LeiaJsonAsync<RespostaDeItemDoEncontro>(primeiraRespostaDoCombinado);
+        RespostaDeItemDoEncontro combinadoRepetido =
+            await LeiaJsonAsync<RespostaDeItemDoEncontro>(repeticaoDoCombinado);
+        Assert.Equal(primeiroCombinado.Identificador, combinadoRepetido.Identificador);
+
+        HttpResponseMessage reutilizacaoInvalidaDaPublicacao = await EnvieOperacaoAsync(
+            cliente,
+            $"/api/encontros/{encontro.Identificador}/publicacoes",
+            new RequisicaoDeCriacaoDePublicacao("Outro conteudo"),
+            operacaoDaPublicacao);
+        HttpResponseMessage reutilizacaoInvalidaDoCombinado = await EnvieOperacaoAsync(
+            cliente,
+            $"/api/encontros/{encontro.Identificador}/itens",
+            new RequisicaoDeCriacaoDeItemDoEncontro("Outro combinado", null),
+            operacaoDoCombinado);
+        await GarantaStatusAsync(reutilizacaoInvalidaDaPublicacao, HttpStatusCode.BadRequest);
+        await GarantaStatusAsync(reutilizacaoInvalidaDoCombinado, HttpStatusCode.BadRequest);
+
+        HttpResponseMessage respostaDasPublicacoes = await cliente.GetAsync(
+            $"/api/encontros/{encontro.Identificador}/publicacoes");
+        HttpResponseMessage respostaDosCombinados = await cliente.GetAsync(
+            $"/api/encontros/{encontro.Identificador}/itens");
+        await GarantaStatusAsync(respostaDasPublicacoes, HttpStatusCode.OK);
+        await GarantaStatusAsync(respostaDosCombinados, HttpStatusCode.OK);
+        List<RespostaDePublicacaoDoEncontro> publicacoes =
+            await LeiaJsonAsync<List<RespostaDePublicacaoDoEncontro>>(respostaDasPublicacoes);
+        List<RespostaDeItemDoEncontro> combinados =
+            await LeiaJsonAsync<List<RespostaDeItemDoEncontro>>(respostaDosCombinados);
+
+        Assert.Single(publicacoes, item => !item.EhAtualizacaoDoSistema);
+        Assert.Single(publicacoes, item => item.EhAtualizacaoDoSistema);
+        Assert.Single(combinados);
+    }
+
+    [Fact]
     public async Task Notificacoes_DeveListarMarcarComoLidaEAtualizarPreferencias()
     {
         await fabricaDaApi.ReinicieBancoAsync();
@@ -1964,6 +2198,21 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         await GarantaStatusAsync(resposta, HttpStatusCode.NoContent);
     }
 
+    private static async Task<HttpResponseMessage> EnvieOperacaoAsync<TConteudo>(
+        HttpClient cliente,
+        string rota,
+        TConteudo conteudo,
+        Guid identificadorDaOperacao)
+    {
+        using HttpRequestMessage requisicao = new(HttpMethod.Post, rota)
+        {
+            Content = JsonContent.Create(conteudo)
+        };
+        requisicao.Headers.Add("Idempotency-Key", identificadorDaOperacao.ToString());
+
+        return await cliente.SendAsync(requisicao);
+    }
+
     private static async Task<TResposta> LeiaJsonAsync<TResposta>(HttpResponseMessage resposta)
     {
         string corpo = await resposta.Content.ReadAsStringAsync();
@@ -2289,9 +2538,21 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder construtor)
     {
+        construtor.UseSetting(
+            "Jwt:Chave",
+            "chave-ficticia-exclusiva-dos-testes-de-integracao");
+        construtor.UseSetting(
+            "ConnectionStrings:DefaultConnection",
+            CadeiaDeConexaoDosTestes);
+        construtor.ConfigureLogging(registroDeLogs =>
+        {
+            registroDeLogs.ClearProviders();
+        });
+
         Dictionary<string, string?> configuracoes = new()
         {
             ["ConnectionStrings:DefaultConnection"] = CadeiaDeConexaoDosTestes,
+            ["Jwt:Chave"] = "chave-ficticia-exclusiva-dos-testes-de-integracao",
             ["Cors:OrigensPermitidas:0"] = "http://127.0.0.1:5391",
             ["Cors:OrigensPermitidas:1"] = "http://localhost:5391",
             ["AplicativoWeb:Pasta"] = Path.Combine(

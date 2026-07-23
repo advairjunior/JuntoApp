@@ -10,6 +10,7 @@ abstract interface class IRepositorioDePublicacoesDoEncontro {
   Future<PublicacaoDoEncontro> publiqueAsync({
     required String identificadorDoEncontro,
     required String texto,
+    required String identificadorDaOperacao,
   });
 }
 
@@ -55,11 +56,17 @@ class RepositorioDePublicacoesDoEncontro
   Future<PublicacaoDoEncontro> publiqueAsync({
     required String identificadorDoEncontro,
     required String texto,
+    required String identificadorDaOperacao,
   }) async {
     try {
       Response<dynamic> resposta = await _clienteHttp.post<dynamic>(
         '/api/encontros/$identificadorDoEncontro/publicacoes',
         data: <String, String>{'texto': texto},
+        options: Options(
+          headers: <String, String>{
+            'Idempotency-Key': identificadorDaOperacao,
+          },
+        ),
       );
       Map<String, dynamic> dados =
           Map<String, dynamic>.from(resposta.data as Map<dynamic, dynamic>);

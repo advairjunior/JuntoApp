@@ -119,6 +119,14 @@ public static class RotasDeEncontros
                  .Produces(StatusCodes.Status401Unauthorized)
                  .Produces(StatusCodes.Status403Forbidden);
 
+        encontros.MapDelete("/{identificadorDoEncontro:guid}/participantes/{identificadorDoUsuarioParticipante:guid}", RemovaParticipanteDoEncontroDiretoAsync)
+                 .WithName("RemovaParticipanteDoEncontroDireto")
+                 .Produces(StatusCodes.Status204NoContent)
+                 .Produces(StatusCodes.Status400BadRequest)
+                 .Produces(StatusCodes.Status401Unauthorized)
+                 .Produces(StatusCodes.Status403Forbidden)
+                 .Produces(StatusCodes.Status404NotFound);
+
         encontros.MapGet("/{identificadorDoEncontro:guid}/publicacoes", ListePublicacoesDoEncontroAsync)
                  .WithName("ListePublicacoesDoEncontro")
                  .Produces<IReadOnlyCollection<RespostaDePublicacaoDoEncontro>>(StatusCodes.Status200OK)
@@ -627,8 +635,27 @@ public static class RotasDeEncontros
             resposta);
     }
 
+    private static async Task<IResult> RemovaParticipanteDoEncontroDiretoAsync(
+        Guid identificadorDoEncontro,
+        Guid identificadorDoUsuarioParticipante,
+        ClaimsPrincipal usuarioAutenticado,
+        RemovaParticipanteDoEncontroDireto removaParticipanteDoEncontroDireto,
+        CancellationToken cancellationToken)
+    {
+        Guid identificadorDoUsuarioQueRemove = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
+        RemovaParticipanteDoEncontroDiretoComando comando = new(
+            identificadorDoUsuarioQueRemove,
+            identificadorDoEncontro,
+            identificadorDoUsuarioParticipante);
+
+        await removaParticipanteDoEncontroDireto.RemovaAsync(comando, cancellationToken);
+
+        return Results.NoContent();
+    }
+
     private static async Task<IResult> ListePublicacoesDoEncontroAsync(
         Guid identificadorDoEncontro,
+        HttpResponse respostaHttp,
         ClaimsPrincipal usuarioAutenticado,
         ListePublicacoesDoEncontro listePublicacoesDoEncontro,
         CancellationToken cancellationToken)
@@ -642,12 +669,14 @@ public static class RotasDeEncontros
             .Select(CrieRespostaDePublicacao)
             .ToList();
 
+        respostaHttp.Headers.CacheControl = "private, no-store";
         return Results.Ok(resposta);
     }
 
     private static async Task<IResult> CriePublicacaoDoEncontroAsync(
         Guid identificadorDoEncontro,
         RequisicaoDeCriacaoDePublicacao requisicao,
+        HttpRequest requisicaoHttp,
         ClaimsPrincipal usuarioAutenticado,
         CriePublicacaoDoEncontro criePublicacaoDoEncontro,
         CancellationToken cancellationToken)
@@ -656,7 +685,8 @@ public static class RotasDeEncontros
         CriePublicacaoDoEncontroComando comando = new(
             identificadorDoEncontro,
             identificadorDoUsuario,
-            requisicao.Texto);
+            requisicao.Texto,
+            IdentificadorDaOperacaoHttp.Obtenha(requisicaoHttp));
         PublicacaoDoEncontroResposta publicacao = await criePublicacaoDoEncontro.CrieAsync(
             comando,
             cancellationToken);
@@ -669,6 +699,7 @@ public static class RotasDeEncontros
 
     private static async Task<IResult> ListeMemoriasDoEncontroAsync(
         Guid identificadorDoEncontro,
+        HttpResponse respostaHttp,
         ClaimsPrincipal usuarioAutenticado,
         ListeMemoriasDoEncontro listeMemoriasDoEncontro,
         CancellationToken cancellationToken)
@@ -682,6 +713,7 @@ public static class RotasDeEncontros
             .Select(CrieRespostaDeMemoria)
             .ToList();
 
+        respostaHttp.Headers.CacheControl = "private, no-store";
         return Results.Ok(resposta);
     }
 
@@ -787,6 +819,7 @@ public static class RotasDeEncontros
 
     private static async Task<IResult> ListeItensDoEncontroAsync(
         Guid identificadorDoEncontro,
+        HttpResponse respostaHttp,
         ClaimsPrincipal usuarioAutenticado,
         ListeItensDoEncontro listeItensDoEncontro,
         CancellationToken cancellationToken)
@@ -800,12 +833,14 @@ public static class RotasDeEncontros
             .Select(CrieRespostaDeItemDoEncontro)
             .ToList();
 
+        respostaHttp.Headers.CacheControl = "private, no-store";
         return Results.Ok(resposta);
     }
 
     private static async Task<IResult> CrieItemDoEncontroAsync(
         Guid identificadorDoEncontro,
         RequisicaoDeCriacaoDeItemDoEncontro requisicao,
+        HttpRequest requisicaoHttp,
         ClaimsPrincipal usuarioAutenticado,
         CrieItemDoEncontro crieItemDoEncontro,
         CancellationToken cancellationToken)
@@ -815,7 +850,8 @@ public static class RotasDeEncontros
             identificadorDoEncontro,
             identificadorDoUsuario,
             requisicao.Descricao,
-            requisicao.IdentificadorDoUsuarioResponsavel);
+            requisicao.IdentificadorDoUsuarioResponsavel,
+            IdentificadorDaOperacaoHttp.Obtenha(requisicaoHttp));
         ItemDoEncontroResposta item = await crieItemDoEncontro.CrieAsync(comando, cancellationToken);
         RespostaDeItemDoEncontro resposta = CrieRespostaDeItemDoEncontro(item);
 

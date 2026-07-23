@@ -30,13 +30,26 @@ public sealed class CrieItemDoEncontro(
             cancellationToken);
 
         DateTimeOffset agora = relogio.Agora;
+        Guid identificadorDaOperacao = comando.IdentificadorDaOperacao == Guid.Empty
+            ? Guid.NewGuid()
+            : comando.IdentificadorDaOperacao;
         ItemDoEncontro item = ItemDoEncontro.Crie(
-            Guid.NewGuid(),
+            identificadorDaOperacao,
             comando.IdentificadorDoEncontro,
             comando.Descricao,
             comando.IdentificadorDoUsuario,
             comando.IdentificadorDoUsuarioResponsavel,
             agora);
+        ItemDoEncontro? itemExistente = await repositorioDeItensDoEncontro.ObtenhaPorIdentificadorAsync(
+            comando.IdentificadorDoEncontro,
+            identificadorDaOperacao,
+            cancellationToken);
+
+        if (itemExistente is not null)
+        {
+            GarantaMesmaOperacao(itemExistente, item);
+            return await CrieRespostaAsync(itemExistente, comando.IdentificadorDoUsuario, cancellationToken);
+        }
 
         await repositorioDeItensDoEncontro.AdicioneAsync(item, cancellationToken);
         string nomeDoAutor = await AcessoAItensDoEncontro.ObtenhaNomeDoUsuarioAsync(
@@ -70,11 +83,33 @@ public sealed class CrieItemDoEncontro(
 
         await unidadeDeTrabalho.SalveAlteracoesAsync(cancellationToken);
 
+        return await CrieRespostaAsync(item, comando.IdentificadorDoUsuario, cancellationToken);
+    }
+
+    private async Task<ItemDoEncontroResposta> CrieRespostaAsync(
+        ItemDoEncontro item,
+        Guid identificadorDoUsuario,
+        CancellationToken cancellationToken)
+    {
         IReadOnlyCollection<Usuario> usuarios = await AcessoAItensDoEncontro.ObtenhaUsuariosDosResponsaveisAsync(
             repositorioDeUsuarios,
             [item],
             cancellationToken);
 
-        return AcessoAItensDoEncontro.CrieResposta(item, usuarios, comando.IdentificadorDoUsuario);
+        return AcessoAItensDoEncontro.CrieResposta(item, usuarios, identificadorDoUsuario);
+    }
+
+    private static void GarantaMesmaOperacao(
+        ItemDoEncontro itemExistente,
+        ItemDoEncontro itemSolicitado)
+    {
+        if (itemExistente.IdentificadorDoEncontro != itemSolicitado.IdentificadorDoEncontro ||
+            itemExistente.IdentificadorDoUsuarioQueCriou != itemSolicitado.IdentificadorDoUsuarioQueCriou ||
+            !string.Equals(itemExistente.Descricao, itemSolicitado.Descricao, StringComparison.Ordinal) ||
+            itemExistente.IdentificadorDoUsuarioResponsavel != itemSolicitado.IdentificadorDoUsuarioResponsavel)
+        {
+            throw new ExcecaoDeAplicacaoException(
+                "A chave de idempotencia ja foi utilizada em outro combinado.");
+        }
     }
 }

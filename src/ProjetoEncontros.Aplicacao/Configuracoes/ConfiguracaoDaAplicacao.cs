@@ -40,6 +40,7 @@ public static class ConfiguracaoDaAplicacao
         servicos.AddScoped<CrieEncontroDireto>();
         servicos.AddScoped<BusqueLocalizacoes>();
         servicos.AddScoped<CrieConviteDoEncontro>();
+        servicos.AddScoped<RemovaParticipanteDoEncontroDireto>();
         servicos.AddScoped<CriePublicacaoDoEncontro>();
         servicos.AddScoped<CrieMemoriaDoEncontro>();
         servicos.AddScoped<ListeConvitesDoEncontroDoUsuario>();

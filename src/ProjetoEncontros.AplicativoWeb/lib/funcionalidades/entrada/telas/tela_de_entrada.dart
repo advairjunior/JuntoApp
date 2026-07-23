@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/acessibilidade/identificadores_semanticos.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/autenticacao/controlador_de_sessao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/autenticacao/estado_da_sessao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/estrutura_responsiva_do_aplicativo.dart';
@@ -274,43 +275,50 @@ class _FormularioDeEntrada extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: EspacamentosDoAplicativo.grande),
-                TextFormField(
-                  controller: controladorDoEmail,
-                  enabled: !sessao.operacaoEstaEmAndamento,
-                  keyboardType: TextInputType.emailAddress,
-                  textInputAction: TextInputAction.next,
-                  autofillHints: const <String>[AutofillHints.email],
-                  decoration: const InputDecoration(
-                    hintText: 'E-mail',
-                    prefixIcon: Icon(Icons.mail_outline_rounded),
+                Semantics(
+                  identifier: IdentificadoresSemanticos.entradaEmail,
+                  child: TextFormField(
+                    controller: controladorDoEmail,
+                    enabled: !sessao.operacaoEstaEmAndamento,
+                    keyboardType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const <String>[AutofillHints.email],
+                    decoration: const InputDecoration(
+                      labelText: 'E-mail',
+                      prefixIcon: Icon(Icons.mail_outline_rounded),
+                    ),
+                    validator: valideEmail,
                   ),
-                  validator: valideEmail,
                 ),
                 const SizedBox(height: EspacamentosDoAplicativo.medio),
-                TextFormField(
-                  controller: controladorDaSenha,
-                  enabled: !sessao.operacaoEstaEmAndamento,
-                  obscureText: !senhaEstaVisivel,
-                  textInputAction: TextInputAction.done,
-                  autofillHints: const <String>[AutofillHints.password],
-                  onFieldSubmitted: (_) => aoEntrar(),
-                  decoration: InputDecoration(
-                    hintText: 'Senha',
-                    prefixIcon: const Icon(Icons.lock_outline_rounded),
-                    suffixIcon: IconButton(
-                      tooltip:
-                          senhaEstaVisivel ? 'Ocultar senha' : 'Mostrar senha',
-                      onPressed: sessao.operacaoEstaEmAndamento
-                          ? null
-                          : aoAlternarVisibilidadeDaSenha,
-                      icon: Icon(
-                        senhaEstaVisivel
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
+                Semantics(
+                  identifier: IdentificadoresSemanticos.entradaSenha,
+                  child: TextFormField(
+                    controller: controladorDaSenha,
+                    enabled: !sessao.operacaoEstaEmAndamento,
+                    obscureText: !senhaEstaVisivel,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const <String>[AutofillHints.password],
+                    onFieldSubmitted: (_) => aoEntrar(),
+                    decoration: InputDecoration(
+                      labelText: 'Senha',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      suffixIcon: IconButton(
+                        tooltip: senhaEstaVisivel
+                            ? 'Ocultar senha'
+                            : 'Mostrar senha',
+                        onPressed: sessao.operacaoEstaEmAndamento
+                            ? null
+                            : aoAlternarVisibilidadeDaSenha,
+                        icon: Icon(
+                          senhaEstaVisivel
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                        ),
                       ),
                     ),
+                    validator: valideSenha,
                   ),
-                  validator: valideSenha,
                 ),
                 if (sessao.mensagemDeErro != null) ...<Widget>[
                   const SizedBox(height: EspacamentosDoAplicativo.padrao),
@@ -321,14 +329,17 @@ class _FormularioDeEntrada extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: EspacamentosDoAplicativo.padrao),
-                FilledButton(
-                  onPressed: sessao.operacaoEstaEmAndamento ? null : aoEntrar,
-                  child: sessao.operacaoEstaEmAndamento
-                      ? const SizedBox.square(
-                          dimension: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Entrar'),
+                Semantics(
+                  identifier: IdentificadoresSemanticos.entradaConfirmar,
+                  child: FilledButton(
+                    onPressed: sessao.operacaoEstaEmAndamento ? null : aoEntrar,
+                    child: sessao.operacaoEstaEmAndamento
+                        ? const SizedBox.square(
+                            dimension: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Entrar'),
+                  ),
                 ),
                 const SizedBox(height: EspacamentosDoAplicativo.medio),
                 TextButton(

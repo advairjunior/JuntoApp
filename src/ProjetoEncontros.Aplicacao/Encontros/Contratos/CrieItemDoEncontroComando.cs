@@ -4,4 +4,5 @@ public sealed record CrieItemDoEncontroComando(
     Guid IdentificadorDoEncontro,
     Guid IdentificadorDoUsuario,
     string Descricao,
-    Guid? IdentificadorDoUsuarioResponsavel);
+    Guid? IdentificadorDoUsuarioResponsavel,
+    Guid IdentificadorDaOperacao = default);

@@ -428,6 +428,23 @@ public sealed class TestesDeEncontro
     }
 
     [Fact]
+    public void Remova_DuasVezesDevePreservarDataDaPrimeiraRemocao()
+    {
+        ParticipanteDoEncontro participante = ParticipanteDoEncontro.CrieConvidado(
+            IdentificadorDoParticipante,
+            IdentificadorDoEncontro,
+            IdentificadorDoUsuarioQueCriou,
+            CriadoEm);
+        DateTimeOffset primeiraRemocaoEm = CriadoEm.AddMinutes(1);
+
+        participante.Remova(primeiraRemocaoEm);
+        participante.Remova(CriadoEm.AddMinutes(2));
+
+        Assert.Equal(SituacaoDoParticipanteDoEncontro.Removido, participante.Situacao);
+        Assert.Equal(primeiraRemocaoEm, participante.RespondidoEm);
+    }
+
+    [Fact]
     public void CrieMemoria_DeveCriarMemoriaDoEncontro()
     {
         MemoriaDoEncontro memoria = CrieMemoria("  Mesa pronta para a resenha  ");

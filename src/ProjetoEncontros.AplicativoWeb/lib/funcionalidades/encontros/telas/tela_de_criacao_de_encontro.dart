@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/acessibilidade/identificadores_semanticos.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/conteudo_responsivo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/erros/excecao_da_api.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/cores_do_aplicativo.dart';
@@ -176,23 +177,26 @@ class _EstadoDaTelaDeCriacaoDeEncontro
                       const SizedBox(
                         height: EspacamentosDoAplicativo.grande,
                       ),
-                      TextFormField(
-                        controller: _controladorDoTitulo,
-                        autofocus: !_estaEditando,
-                        maxLength: 120,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Título do encontro',
-                          prefixIcon: Icon(Icons.celebration_outlined),
-                        ),
-                        onChanged: _aoAlterarDescricaoDoLocal,
-                        validator: (String? titulo) {
-                          if (titulo == null || titulo.trim().isEmpty) {
-                            return 'Informe um título para o encontro.';
-                          }
+                      Semantics(
+                        identifier: IdentificadoresSemanticos.encontroTitulo,
+                        child: TextFormField(
+                          controller: _controladorDoTitulo,
+                          autofocus: !_estaEditando,
+                          maxLength: 120,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Título do encontro',
+                            prefixIcon: Icon(Icons.celebration_outlined),
+                          ),
+                          onChanged: _aoAlterarDescricaoDoLocal,
+                          validator: (String? titulo) {
+                            if (titulo == null || titulo.trim().isEmpty) {
+                              return 'Informe um título para o encontro.';
+                            }
 
-                          return null;
-                        },
+                            return null;
+                          },
+                        ),
                       ),
                       const SizedBox(height: EspacamentosDoAplicativo.medio),
                       _SeletorDoTipoDoEncontro(
@@ -231,26 +235,28 @@ class _EstadoDaTelaDeCriacaoDeEncontro
                         ],
                       ),
                       const SizedBox(height: EspacamentosDoAplicativo.medio),
-                      TextFormField(
-                        controller: _controladorDoLocal,
-                        maxLength: 200,
-                        textInputAction: TextInputAction.next,
-                        decoration: const InputDecoration(
-                          labelText: 'Nome ou endereço do local',
-                          prefixIcon: Icon(Icons.location_on_outlined),
-                        ),
-                        validator: (String? local) {
-                          if (_latitude != null &&
-                              (local == null || local.trim().isEmpty)) {
-                            return 'Descreva o local que será mostrado aos convidados.';
-                          }
+                      Semantics(
+                        identifier: IdentificadoresSemanticos.encontroLocal,
+                        child: TextFormField(
+                          controller: _controladorDoLocal,
+                          maxLength: 200,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'Nome ou endereço do local',
+                            prefixIcon: Icon(Icons.location_on_outlined),
+                          ),
+                          validator: (String? local) {
+                            if (_latitude != null &&
+                                (local == null || local.trim().isEmpty)) {
+                              return 'Descreva o local que será mostrado aos convidados.';
+                            }
 
-                          return null;
-                        },
+                            return null;
+                          },
+                        ),
                       ),
                       _ControleDaLocalizacao(
-                        temCoordenadas:
-                            _latitude != null && _longitude != null,
+                        temCoordenadas: _latitude != null && _longitude != null,
                         podeAdicionar:
                             _controladorDoLocal.text.trim().isNotEmpty,
                         estaObtendo: _estaObtendoLocalizacao,
@@ -260,15 +266,18 @@ class _EstadoDaTelaDeCriacaoDeEncontro
                         mensagem: _mensagemDaLocalizacao,
                       ),
                       const SizedBox(height: EspacamentosDoAplicativo.medio),
-                      TextFormField(
-                        controller: _controladorDaDescricao,
-                        maxLength: 500,
-                        minLines: 3,
-                        maxLines: 5,
-                        decoration: const InputDecoration(
-                          labelText: 'Descrição opcional',
-                          alignLabelWithHint: true,
-                          prefixIcon: Icon(Icons.notes_rounded),
+                      Semantics(
+                        identifier: IdentificadoresSemanticos.encontroDescricao,
+                        child: TextFormField(
+                          controller: _controladorDaDescricao,
+                          maxLength: 500,
+                          minLines: 3,
+                          maxLines: 5,
+                          decoration: const InputDecoration(
+                            labelText: 'Descrição opcional',
+                            alignLabelWithHint: true,
+                            prefixIcon: Icon(Icons.notes_rounded),
+                          ),
                         ),
                       ),
                       if (_mensagemDeErro != null) ...<Widget>[
@@ -282,29 +291,32 @@ class _EstadoDaTelaDeCriacaoDeEncontro
                         ),
                       ],
                       const SizedBox(height: EspacamentosDoAplicativo.grande),
-                      FilledButton.icon(
-                        key: Key(
-                          _estaEditando
-                              ? 'botao-salvar-encontro'
-                              : 'botao-criar-encontro',
-                        ),
-                        onPressed: _estaSalvando || _estaObtendoLocalizacao
-                            ? null
-                            : _salveAsync,
-                        icon: _estaSalvando
-                            ? const SizedBox.square(
-                                dimension: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.check_rounded),
-                        label: Text(
-                          _estaSalvando
-                              ? (_estaEditando ? 'Salvando...' : 'Criando...')
-                              : (_estaEditando
-                                  ? 'Salvar alterações'
-                                  : 'Criar encontro'),
+                      Semantics(
+                        identifier: IdentificadoresSemanticos.encontroConfirmar,
+                        child: FilledButton.icon(
+                          key: Key(
+                            _estaEditando
+                                ? 'botao-salvar-encontro'
+                                : 'botao-criar-encontro',
+                          ),
+                          onPressed: _estaSalvando || _estaObtendoLocalizacao
+                              ? null
+                              : _salveAsync,
+                          icon: _estaSalvando
+                              ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.check_rounded),
+                          label: Text(
+                            _estaSalvando
+                                ? (_estaEditando ? 'Salvando...' : 'Criando...')
+                                : (_estaEditando
+                                    ? 'Salvar alterações'
+                                    : 'Criar encontro'),
+                          ),
                         ),
                       ),
                     ],
@@ -772,20 +784,20 @@ class _ControleDaLocalizacao extends StatelessWidget {
                 children: <Widget>[
                   Row(
                     children: <Widget>[
-                  const Icon(
-                    Icons.location_on_rounded,
-                    color: CoresDoAplicativo.verdeDestaque,
-                    size: 20,
-                  ),
-                  const SizedBox(width: EspacamentosDoAplicativo.pequeno),
-                  const Expanded(
-                    child: Text('Ponto fixo adicionado ao encontro'),
-                  ),
-                  IconButton(
-                    tooltip: 'Remover ponto do mapa',
-                    onPressed: aoRemover,
-                    icon: const Icon(Icons.close_rounded),
-                  ),
+                      const Icon(
+                        Icons.location_on_rounded,
+                        color: CoresDoAplicativo.verdeDestaque,
+                        size: 20,
+                      ),
+                      const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+                      const Expanded(
+                        child: Text('Ponto fixo adicionado ao encontro'),
+                      ),
+                      IconButton(
+                        tooltip: 'Remover ponto do mapa',
+                        onPressed: aoRemover,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
                     ],
                   ),
                   Align(

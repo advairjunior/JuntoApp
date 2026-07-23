@@ -14,6 +14,8 @@ obj/
 TestResults/
 coverage/
 *.trx
+node_modules/
+playwright-report/
 
 docker-data/
 .tmp/

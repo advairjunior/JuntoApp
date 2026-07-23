@@ -685,7 +685,7 @@ void main() {
     expect(campo.controller?.text, isEmpty);
   });
 
-  testWidgets('deve preservar o rascunho quando a publicacao falhar', (
+  testWidgets('deve preservar rascunho e operacao quando a publicacao falhar', (
     WidgetTester testador,
   ) async {
     RepositorioDeAutenticacaoFalso repositorio =
@@ -714,6 +714,17 @@ void main() {
       find.byKey(const Key('texto-da-nova-publicacao')),
     );
     expect(campo.controller?.text, 'Não quero perder este texto.');
+
+    repositorioDePublicacoes.deveFalharAoPublicar = false;
+    await testador.tap(find.byKey(const Key('publicar-momento')));
+    await testador.pumpAndSettle();
+
+    expect(repositorioDePublicacoes.identificadoresDasOperacoes, hasLength(2));
+    expect(
+      repositorioDePublicacoes.identificadoresDasOperacoes.toSet(),
+      hasLength(1),
+    );
+    expect(find.text('Não quero perder este texto.'), findsOneWidget);
   });
 
   testWidgets('deve selecionar e publicar foto com legenda no mural', (
@@ -1418,6 +1429,7 @@ void main() {
     RepositorioDeAutenticacaoFalso repositorio =
         RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
     RepositorioDeCombinadosFalso combinados = RepositorioDeCombinadosFalso();
+    combinados.deveFalharNaProximaCriacao = true;
 
     await testador.pumpWidget(
       _crieAplicativo(repositorio, repositorioDeCombinados: combinados),
@@ -1447,7 +1459,13 @@ void main() {
     await testador.tap(find.byKey(const Key('salvar-combinado')));
     await testador.pumpAndSettle();
 
+    expect(find.text('Não foi possível salvar o combinado.'), findsOneWidget);
+    await testador.tap(find.byKey(const Key('salvar-combinado')));
+    await testador.pumpAndSettle();
+
     expect(find.text('Levar gelo'), findsOneWidget);
+    expect(combinados.identificadoresDasOperacoes, hasLength(2));
+    expect(combinados.identificadoresDasOperacoes.toSet(), hasLength(1));
     await testador.tap(find.byTooltip('Marcar como resolvido'));
     await testador.pumpAndSettle();
     expect(combinados.itemFoiResolvido, isTrue);
@@ -1588,6 +1606,8 @@ class RepositorioDeNotificacoesFalso implements IRepositorioDeNotificacoes {
 class RepositorioDeCombinadosFalso implements IRepositorioDeCombinados {
   final List<ItemDoEncontro> _itens = <ItemDoEncontro>[];
   bool itemFoiResolvido = false;
+  bool deveFalharNaProximaCriacao = false;
+  final List<String> identificadoresDasOperacoes = <String>[];
 
   @override
   Future<List<ItemDoEncontro>> listeAsync(
@@ -1599,8 +1619,16 @@ class RepositorioDeCombinadosFalso implements IRepositorioDeCombinados {
   Future<void> crieAsync({
     required String identificadorDoEncontro,
     required String descricao,
+    required String identificadorDaOperacao,
     String? identificadorDoResponsavel,
   }) async {
+    identificadoresDasOperacoes.add(identificadorDaOperacao);
+
+    if (deveFalharNaProximaCriacao) {
+      deveFalharNaProximaCriacao = false;
+      throw Exception('Falha simulada ao criar combinado.');
+    }
+
     _itens.add(
       ItemDoEncontro(
         identificador: 'item',
@@ -1763,10 +1791,11 @@ class RepositorioDePublicacoesDoEncontroFalso
     this.publicacoesPersonalizadas,
   });
 
-  final bool deveFalharAoPublicar;
+  bool deveFalharAoPublicar;
   final bool deveFalharAoListar;
   final List<PublicacaoDoEncontro>? publicacoesPersonalizadas;
   String? ultimoTextoPublicado;
+  final List<String> identificadoresDasOperacoes = <String>[];
 
   @override
   Future<List<PublicacaoDoEncontro>> listeAsync(
@@ -1821,8 +1850,10 @@ class RepositorioDePublicacoesDoEncontroFalso
   Future<PublicacaoDoEncontro> publiqueAsync({
     required String identificadorDoEncontro,
     required String texto,
+    required String identificadorDaOperacao,
   }) async {
     ultimoTextoPublicado = texto;
+    identificadoresDasOperacoes.add(identificadorDaOperacao);
 
     if (deveFalharAoPublicar) {
       throw const ExcecaoDaApi(

@@ -10,6 +10,7 @@ abstract interface class IRepositorioDeCombinados {
   Future<void> crieAsync({
     required String identificadorDoEncontro,
     required String descricao,
+    required String identificadorDaOperacao,
     String? identificadorDoResponsavel,
   });
 
@@ -78,6 +79,7 @@ class RepositorioDeCombinados implements IRepositorioDeCombinados {
   Future<void> crieAsync({
     required String identificadorDoEncontro,
     required String descricao,
+    required String identificadorDaOperacao,
     String? identificadorDoResponsavel,
   }) async {
     try {
@@ -87,6 +89,11 @@ class RepositorioDeCombinados implements IRepositorioDeCombinados {
           'descricao': descricao,
           'identificadorDoUsuarioResponsavel': identificadorDoResponsavel,
         },
+        options: Options(
+          headers: <String, String>{
+            'Idempotency-Key': identificadorDaOperacao,
+          },
+        ),
       );
     } on DioException catch (excecao) {
       throw _convertaExcecao(excecao, 'Não foi possível criar o combinado.');
