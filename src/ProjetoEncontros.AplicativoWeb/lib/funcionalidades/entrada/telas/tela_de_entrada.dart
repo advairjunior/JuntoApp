@@ -15,10 +15,12 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/sombras_do_a
 class TelaDeEntrada extends ConsumerStatefulWidget {
   const TelaDeEntrada({
     this.cadastroFoiConcluido = false,
+    this.retorno,
     super.key,
   });
 
   final bool cadastroFoiConcluido;
+  final String? retorno;
 
   @override
   ConsumerState<TelaDeEntrada> createState() => _EstadoDaTelaDeEntrada();
@@ -130,7 +132,13 @@ class _EstadoDaTelaDeEntrada extends ConsumerState<TelaDeEntrada> {
 
   void _abraCadastro() {
     ref.read(provedorDoControladorDeSessao.notifier).limpeMensagemDeErro();
-    context.go('/cadastro');
+    String? retorno = widget.retorno;
+
+    context.go(
+      retorno == null
+          ? '/cadastro'
+          : '/cadastro?retorno=${Uri.encodeComponent(retorno)}',
+    );
   }
 
   String? _valideEmail(String? email) {

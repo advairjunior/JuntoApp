@@ -1,5 +1,6 @@
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/participante_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/localizacao_do_encontro.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/preferencias_do_aniversario.dart';
 
 class EncontroDetalhado {
   const EncontroDetalhado({
@@ -16,6 +17,7 @@ class EncontroDetalhado {
     this.localizacao,
     this.urlDaImagemDeCapa,
     this.tipo,
+    this.preferenciasDoAniversario,
   });
 
   factory EncontroDetalhado.deJson(Map<String, dynamic> json) {
@@ -27,6 +29,12 @@ class EncontroDetalhado {
         : Map<String, dynamic>.from(
             json['localizacao'] as Map<dynamic, dynamic>,
           );
+    Map<String, dynamic>? preferenciasRecebidas =
+        json['preferenciasDoAniversario'] == null
+            ? null
+            : Map<String, dynamic>.from(
+                json['preferenciasDoAniversario'] as Map<dynamic, dynamic>,
+              );
 
     return EncontroDetalhado(
       identificador: json['identificador'] as String,
@@ -53,6 +61,9 @@ class EncontroDetalhado {
           )
           .toList(),
       tipo: json['tipo'] as String?,
+      preferenciasDoAniversario: preferenciasRecebidas == null
+          ? null
+          : PreferenciasDoAniversario.deJson(preferenciasRecebidas),
     );
   }
 
@@ -69,6 +80,7 @@ class EncontroDetalhado {
   final bool podeCancelar;
   final List<ParticipanteDoEncontro> participantes;
   final String? tipo;
+  final PreferenciasDoAniversario? preferenciasDoAniversario;
 
   ParticipanteDoEncontro? get participanteAtual {
     for (ParticipanteDoEncontro participante in participantes) {
@@ -122,6 +134,7 @@ class EncontroDetalhado {
       podeCancelar: podeCancelar,
       participantes: novosParticipantes,
       tipo: tipo,
+      preferenciasDoAniversario: preferenciasDoAniversario,
     );
   }
 }

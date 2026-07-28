@@ -55,6 +55,11 @@ public sealed class MapeamentoDeParticipanteDoEncontro : IEntityTypeConfiguratio
             .HasColumnName("respondido_em")
             .HasConversion(ConversorDeDataOpcional);
 
+        construtor.Property(participante => participante.VisualizadoAteEm)
+            .HasColumnName("visualizado_ate_em")
+            .HasConversion(ConversorDeData)
+            .IsRequired();
+
         construtor.Property(participante => participante.CriadoEm)
             .HasColumnName("criado_em")
             .HasConversion(ConversorDeData)

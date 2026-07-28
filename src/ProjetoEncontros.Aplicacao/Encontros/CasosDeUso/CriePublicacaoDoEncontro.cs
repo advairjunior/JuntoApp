@@ -28,7 +28,8 @@ public sealed class CriePublicacaoDoEncontro(
             comando.IdentificadorDoEncontro,
             comando.IdentificadorDoUsuarioAutor,
             comando.Texto,
-            relogio.Agora);
+            relogio.Agora,
+            comando.IdentificadorDaPublicacaoRespondida);
         PublicacaoDoEncontro? publicacaoExistente = await repositorioDeEncontros.ObtenhaPublicacaoAsync(
             identificadorDaOperacao,
             cancellationToken);
@@ -36,18 +37,39 @@ public sealed class CriePublicacaoDoEncontro(
         if (publicacaoExistente is not null)
         {
             GarantaMesmaOperacao(publicacaoExistente, publicacao);
-            return CrieResposta(publicacaoExistente, autor);
+            PublicacaoDoEncontro? publicacaoRespondidaExistente = await ObtenhaPublicacaoRespondidaAsync(
+                publicacaoExistente.IdentificadorDaPublicacaoRespondida,
+                cancellationToken);
+            Usuario? autorDaPublicacaoRespondidaExistente = await ObtenhaAutorDaPublicacaoRespondidaAsync(
+                publicacaoRespondidaExistente,
+                cancellationToken);
+
+            return CrieResposta(
+                publicacaoExistente,
+                autor,
+                publicacaoRespondidaExistente,
+                autorDaPublicacaoRespondidaExistente);
         }
+
+        PublicacaoDoEncontro? publicacaoRespondida = await ObtenhaPublicacaoRespondidaAsync(
+            publicacao.IdentificadorDaPublicacaoRespondida,
+            cancellationToken);
+        ValidePublicacaoRespondida(publicacao, publicacaoRespondida);
+        Usuario? autorDaPublicacaoRespondida = await ObtenhaAutorDaPublicacaoRespondidaAsync(
+            publicacaoRespondida,
+            cancellationToken);
 
         await repositorioDeEncontros.AdicionePublicacaoAsync(publicacao, cancellationToken);
         await unidadeDeTrabalho.SalveAlteracoesAsync(cancellationToken);
 
-        return CrieResposta(publicacao, autor);
+        return CrieResposta(publicacao, autor, publicacaoRespondida, autorDaPublicacaoRespondida);
     }
 
     private static PublicacaoDoEncontroResposta CrieResposta(
         PublicacaoDoEncontro publicacao,
-        Usuario autor)
+        Usuario autor,
+        PublicacaoDoEncontro? publicacaoRespondida,
+        Usuario? autorDaPublicacaoRespondida)
     {
         return new(
             publicacao.Identificador,
@@ -62,7 +84,25 @@ public sealed class CriePublicacaoDoEncontro(
             publicacao.TamanhoDaMidiaEmBytes,
             publicacao.PublicadoEm,
             publicacao.EhAtualizacaoDoSistema,
-            true);
+            true,
+            CrieResumoDaPublicacaoRespondida(publicacaoRespondida, autorDaPublicacaoRespondida));
+    }
+
+    private static PublicacaoRespondidaResposta? CrieResumoDaPublicacaoRespondida(
+        PublicacaoDoEncontro? publicacaoRespondida,
+        Usuario? autorDaPublicacaoRespondida)
+    {
+        if (publicacaoRespondida is null || autorDaPublicacaoRespondida is null)
+        {
+            return null;
+        }
+
+        return new(
+            publicacaoRespondida.Identificador,
+            autorDaPublicacaoRespondida.Nome,
+            publicacaoRespondida.EstaRemovida ? null : publicacaoRespondida.Texto,
+            !publicacaoRespondida.EstaRemovida && publicacaoRespondida.TemMidia,
+            publicacaoRespondida.EstaRemovida);
     }
 
     private static void GarantaMesmaOperacao(
@@ -72,12 +112,68 @@ public sealed class CriePublicacaoDoEncontro(
         if (publicacaoExistente.IdentificadorDoEncontro != publicacaoSolicitada.IdentificadorDoEncontro ||
             publicacaoExistente.IdentificadorDoUsuarioAutor != publicacaoSolicitada.IdentificadorDoUsuarioAutor ||
             !string.Equals(publicacaoExistente.Texto, publicacaoSolicitada.Texto, StringComparison.Ordinal) ||
+            publicacaoExistente.IdentificadorDaPublicacaoRespondida !=
+                publicacaoSolicitada.IdentificadorDaPublicacaoRespondida ||
             publicacaoExistente.TemMidia ||
             publicacaoExistente.EhAtualizacaoDoSistema ||
             publicacaoExistente.EstaRemovida)
         {
             throw new ExcecaoDeAplicacaoException(
                 "A chave de idempotencia ja foi utilizada em outra publicacao.");
+        }
+    }
+
+    private async Task<PublicacaoDoEncontro?> ObtenhaPublicacaoRespondidaAsync(
+        Guid? identificadorDaPublicacaoRespondida,
+        CancellationToken cancellationToken)
+    {
+        if (!identificadorDaPublicacaoRespondida.HasValue)
+        {
+            return null;
+        }
+
+        return await repositorioDeEncontros.ObtenhaPublicacaoAsync(
+            identificadorDaPublicacaoRespondida.Value,
+            cancellationToken);
+    }
+
+    private async Task<Usuario?> ObtenhaAutorDaPublicacaoRespondidaAsync(
+        PublicacaoDoEncontro? publicacaoRespondida,
+        CancellationToken cancellationToken)
+    {
+        if (publicacaoRespondida is null)
+        {
+            return null;
+        }
+
+        Usuario? autor = await repositorioDeUsuarios.ObtenhaPorIdentificadorAsync(
+            publicacaoRespondida.IdentificadorDoUsuarioAutor,
+            cancellationToken);
+
+        if (autor is null)
+        {
+            throw new ExcecaoDeAplicacaoException("Autor da publicação respondida não encontrado.");
+        }
+
+        return autor;
+    }
+
+    private static void ValidePublicacaoRespondida(
+        PublicacaoDoEncontro publicacao,
+        PublicacaoDoEncontro? publicacaoRespondida)
+    {
+        if (!publicacao.IdentificadorDaPublicacaoRespondida.HasValue)
+        {
+            return;
+        }
+
+        if (publicacaoRespondida is null ||
+            publicacaoRespondida.IdentificadorDoEncontro != publicacao.IdentificadorDoEncontro ||
+            publicacaoRespondida.EhAtualizacaoDoSistema ||
+            publicacaoRespondida.EstaRemovida)
+        {
+            throw new ExcecaoDeAplicacaoException(
+                "A publicação respondida não está disponível neste encontro.");
         }
     }
 

@@ -12,6 +12,8 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/erros/excecao_da_
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/foto_de_perfil.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/imagem_privada.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/repositorio_de_imagens_privadas.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/instalacao/contrato_do_servico_de_instalacao.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/instalacao/servico_de_instalacao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/cores_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/raios_do_aplicativo.dart';
@@ -44,15 +46,27 @@ class _EstadoDaTelaDePerfil extends ConsumerState<TelaDePerfil> {
   String? _mensagemDoNome;
   bool _mensagemIndicaErro = false;
   bool _mensagemDoNomeIndicaErro = false;
+  bool _instalacaoFoiAceita = false;
 
   @override
   Widget build(BuildContext context) {
     AsyncValue<UsuarioAtual> usuarioAtual = ref.watch(
       provedorDoUsuarioAtualNoPerfil,
     );
+    IServicoDeInstalacao servicoDeInstalacao = ref.watch(
+      provedorDoServicoDeInstalacao,
+    );
+    SituacaoDaInstalacao situacaoDaInstalacao = _instalacaoFoiAceita
+        ? SituacaoDaInstalacao.instalada
+        : servicoDeInstalacao.obtenhaSituacao();
 
     return ConteudoResponsivo(
-      preenchimento: const EdgeInsets.all(EspacamentosDoAplicativo.padrao),
+      preenchimento: const EdgeInsets.fromLTRB(
+        EspacamentosDoAplicativo.padrao,
+        EspacamentosDoAplicativo.grande,
+        EspacamentosDoAplicativo.padrao,
+        EspacamentosDoAplicativo.padrao,
+      ),
       filho: usuarioAtual.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, __) => _ErroDoPerfil(
@@ -68,13 +82,111 @@ class _EstadoDaTelaDePerfil extends ConsumerState<TelaDePerfil> {
           mensagemDoNome: _mensagemDoNome,
           mensagemIndicaErro: _mensagemIndicaErro,
           mensagemDoNomeIndicaErro: _mensagemDoNomeIndicaErro,
+          situacaoDaInstalacao: situacaoDaInstalacao,
           aoTocarNaFoto: () => _aoTocarNaFotoAsync(usuario),
           aoEditarNome: () => _abraEditorDoNomeAsync(usuario),
+          aoInstalar: () => _instaleAsync(
+            servicoDeInstalacao,
+            situacaoDaInstalacao,
+          ),
           aoSair: () => ref
               .read(provedorDoControladorDeSessao.notifier)
               .encerreSessaoAsync(),
         ),
       ),
+    );
+  }
+
+  Future<void> _instaleAsync(
+    IServicoDeInstalacao servicoDeInstalacao,
+    SituacaoDaInstalacao situacao,
+  ) async {
+    if (situacao == SituacaoDaInstalacao.instalada) {
+      return;
+    }
+
+    if (situacao == SituacaoDaInstalacao.podeSolicitar) {
+      bool aceitou = await servicoDeInstalacao.soliciteInstalacaoAsync();
+
+      if (aceitou && mounted) {
+        setState(() {
+          _instalacaoFoiAceita = true;
+        });
+      }
+
+      return;
+    }
+
+    await _mostreOrientacoesDeInstalacaoAsync(
+      orientacaoParaIos: situacao == SituacaoDaInstalacao.requerOrientacaoNoIos,
+    );
+  }
+
+  Future<void> _mostreOrientacoesDeInstalacaoAsync({
+    required bool orientacaoParaIos,
+  }) {
+    return showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: CoresDoAplicativo.fundoDoCartao,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (BuildContext contextoDaFolha) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Instalar o Juntô',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: EspacamentosDoAplicativo.pequeno),
+                  Text(
+                    orientacaoParaIos
+                        ? 'No Safari do iPhone:'
+                        : 'No menu do navegador:',
+                    style: const TextStyle(
+                      color: CoresDoAplicativo.textoSecundario,
+                    ),
+                  ),
+                  const SizedBox(height: EspacamentosDoAplicativo.medio),
+                  if (orientacaoParaIos) ...<Widget>[
+                    const _PassoDaInstalacao(
+                      icone: Icons.ios_share_rounded,
+                      texto: 'Toque em Compartilhar.',
+                    ),
+                    const _PassoDaInstalacao(
+                      icone: Icons.add_box_outlined,
+                      texto: 'Escolha “Adicionar à Tela de Início”.',
+                    ),
+                    const _PassoDaInstalacao(
+                      icone: Icons.add_to_home_screen_rounded,
+                      texto: 'Toque em Adicionar.',
+                    ),
+                  ] else
+                    const _PassoDaInstalacao(
+                      icone: Icons.install_mobile_rounded,
+                      texto: 'Escolha “Instalar aplicativo” ou '
+                          '“Adicionar à tela inicial”.',
+                    ),
+                  const SizedBox(height: EspacamentosDoAplicativo.medio),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      key: const Key('fechar-orientacoes-de-instalacao'),
+                      onPressed: () => Navigator.of(contextoDaFolha).pop(),
+                      child: const Text('Entendi'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -448,8 +560,10 @@ class _ConteudoDoPerfil extends StatelessWidget {
     required this.estaAlterandoNome,
     required this.mensagemIndicaErro,
     required this.mensagemDoNomeIndicaErro,
+    required this.situacaoDaInstalacao,
     required this.aoTocarNaFoto,
     required this.aoEditarNome,
+    required this.aoInstalar,
     required this.aoSair,
     this.mensagemDaFoto,
     this.mensagemDoNome,
@@ -462,27 +576,25 @@ class _ConteudoDoPerfil extends StatelessWidget {
   final String? mensagemDoNome;
   final bool mensagemIndicaErro;
   final bool mensagemDoNomeIndicaErro;
+  final SituacaoDaInstalacao situacaoDaInstalacao;
   final VoidCallback aoTocarNaFoto;
   final VoidCallback aoEditarNome;
+  final VoidCallback aoInstalar;
   final Future<void> Function() aoSair;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       children: <Widget>[
-        const CabecalhoDaPagina(
-          titulo: 'Perfil',
-          subtitulo: 'Sua conta e preferências do Juntô.',
-        ),
+        const CabecalhoDaPagina(titulo: 'Perfil'),
         const SizedBox(height: EspacamentosDoAplicativo.grande),
-        CartaoDoAplicativo(
+        Container(
           key: const Key('dados-do-perfil'),
-          elevado: true,
-          preenchimento: const EdgeInsets.symmetric(
+          padding: const EdgeInsets.symmetric(
             horizontal: EspacamentosDoAplicativo.grande,
-            vertical: EspacamentosDoAplicativo.extraGrande,
+            vertical: EspacamentosDoAplicativo.padrao,
           ),
-          filho: Column(
+          child: Column(
             children: <Widget>[
               Semantics(
                 button: true,
@@ -618,11 +730,30 @@ class _ConteudoDoPerfil extends StatelessWidget {
         const SizedBox(height: EspacamentosDoAplicativo.medio),
         CartaoDoAplicativo(
           preenchimento: EdgeInsets.zero,
-          filho: _LinhaDoPerfil(
-            icone: Icons.notifications_none_rounded,
-            titulo: 'Notificações',
-            valor: 'Escolha quais avisos deseja receber',
-            aoTocar: () => context.push<void>('/perfil/notificacoes'),
+          filho: Column(
+            children: <Widget>[
+              _LinhaDoPerfil(
+                chave: const Key('abrir-preferencias-de-notificacao'),
+                icone: Icons.notifications_none_rounded,
+                titulo: 'Notificações',
+                valor: 'Escolha quais avisos deseja receber',
+                aoTocar: () => context.push<void>('/perfil/notificacoes'),
+              ),
+              if (situacaoDaInstalacao !=
+                  SituacaoDaInstalacao.instalada) ...<Widget>[
+                const Divider(height: 1, indent: 56),
+                _LinhaDoPerfil(
+                  chave: const Key('instalar-aplicativo'),
+                  icone: Icons.install_mobile_rounded,
+                  titulo: 'Instalar Juntô',
+                  valor:
+                      situacaoDaInstalacao == SituacaoDaInstalacao.podeSolicitar
+                          ? 'Use como aplicativo neste dispositivo'
+                          : 'Adicionar à tela inicial',
+                  aoTocar: aoInstalar,
+                ),
+              ],
+            ],
           ),
         ),
         const SizedBox(height: EspacamentosDoAplicativo.grande),
@@ -678,9 +809,11 @@ class _LinhaDoPerfil extends StatelessWidget {
     required this.icone,
     required this.titulo,
     required this.valor,
+    this.chave,
     this.aoTocar,
   });
 
+  final Key? chave;
   final IconData icone;
   final String titulo;
   final String valor;
@@ -697,17 +830,13 @@ class _LinhaDoPerfil extends StatelessWidget {
         constraints: const BoxConstraints(minHeight: 48),
         child: Row(
           children: <Widget>[
-            Container(
+            SizedBox(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
-                color: CoresDoAplicativo.fundoDoCartaoSuave,
-                borderRadius: BorderRadius.circular(RaiosDoAplicativo.pequeno),
-              ),
               child: Icon(
                 icone,
                 size: 20,
-                color: CoresDoAplicativo.verdeDestaque,
+                color: CoresDoAplicativo.textoSecundario,
               ),
             ),
             const SizedBox(width: EspacamentosDoAplicativo.medio),
@@ -719,7 +848,7 @@ class _LinhaDoPerfil extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     valor,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: CoresDoAplicativo.textoTerciario,
@@ -744,10 +873,36 @@ class _LinhaDoPerfil extends StatelessWidget {
     }
 
     return InkWell(
-      key: const Key('abrir-preferencias-de-notificacao'),
+      key: chave,
       onTap: aoTocar,
       borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
       child: conteudo,
+    );
+  }
+}
+
+class _PassoDaInstalacao extends StatelessWidget {
+  const _PassoDaInstalacao({
+    required this.icone,
+    required this.texto,
+  });
+
+  final IconData icone;
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: EspacamentosDoAplicativo.pequeno,
+      ),
+      child: Row(
+        children: <Widget>[
+          Icon(icone, color: CoresDoAplicativo.verdeDestaque),
+          const SizedBox(width: EspacamentosDoAplicativo.medio),
+          Expanded(child: Text(texto)),
+        ],
+      ),
     );
   }
 }

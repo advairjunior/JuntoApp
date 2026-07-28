@@ -144,6 +144,7 @@ public sealed class TestesDeEncontros
             Agora));
         EditeEncontroDireto editeEncontroDireto = new(
             ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
             ambiente.ServicoDeNotificacoes,
             ambiente.Relogio,
             ambiente.UnidadeDeTrabalho);
@@ -156,6 +157,70 @@ public sealed class TestesDeEncontros
         Assert.Equal(IdentificadorDeOutroUsuario, notificacao.IdentificadorDoUsuario);
         Assert.Equal(TipoDeNotificacao.AlteracaoDeEncontro, notificacao.Tipo);
         Assert.Equal(encontro.Identificador, notificacao.IdentificadorDoEncontro);
+
+        PublicacaoDoEncontro publicacao = Assert.Single(ambiente.RepositorioDeEncontros.Publicacoes);
+        Assert.True(publicacao.EhAtualizacaoDoSistema);
+        Assert.Equal(
+            "Maria Souza atualizou os dados do encontro: data/horário, local e título.",
+            publicacao.Texto);
+        Assert.True(ambiente.UnidadeDeTrabalho.AlteracoesForamSalvas);
+    }
+
+    [Theory]
+    [InlineData("Confirmado", "Maria Souza confirmou presença no encontro.")]
+    [InlineData("Talvez", "Maria Souza informou que talvez participe do encontro.")]
+    [InlineData("NaoVai", "Maria Souza informou que não participará do encontro.")]
+    public async Task RespondaPresencaDireta_DeveRegistrarMudancaNaLinhaDoTempo(
+        string situacao,
+        string textoEsperado)
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Resenha", InicioFuturo, IdentificadorDoUsuario);
+        ParticipanteDoEncontro participante = Assert.Single(ambiente.RepositorioDeEncontros.Participantes);
+
+        if (string.Equals(situacao, "Confirmado", StringComparison.Ordinal))
+        {
+            participante.MarqueTalvez(Agora.AddMinutes(-1));
+        }
+
+        RespondaPresencaNoEncontroDireto respondaPresenca = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+
+        await respondaPresenca.RespondaAsync(
+            IdentificadorDoUsuario,
+            encontro.Identificador,
+            situacao,
+            CancellationToken.None);
+
+        PublicacaoDoEncontro publicacao = Assert.Single(ambiente.RepositorioDeEncontros.Publicacoes);
+        Assert.True(publicacao.EhAtualizacaoDoSistema);
+        Assert.Equal(textoEsperado, publicacao.Texto);
+        Assert.Equal(Agora, publicacao.PublicadoEm);
+        Assert.True(ambiente.UnidadeDeTrabalho.AlteracoesForamSalvas);
+    }
+
+    [Fact]
+    public async Task RespondaPresencaDireta_NaoDeveRegistrarPublicacaoParaMesmoEstado()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Resenha", InicioFuturo, IdentificadorDoUsuario);
+        RespondaPresencaNoEncontroDireto respondaPresenca = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+
+        await respondaPresenca.RespondaAsync(
+            IdentificadorDoUsuario,
+            encontro.Identificador,
+            "Confirmado",
+            CancellationToken.None);
+
+        Assert.Empty(ambiente.RepositorioDeEncontros.Publicacoes);
+        Assert.False(ambiente.UnidadeDeTrabalho.AlteracoesForamSalvas);
     }
 
     [Fact]
@@ -232,6 +297,84 @@ public sealed class TestesDeEncontros
     }
 
     [Fact]
+    public async Task ListeProximosAsync_DeveContarSomenteNovidadesValidas()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontroDoUsuario = ambiente.CrieEncontroDireto(
+            "Jogo do Brasil",
+            InicioFuturo,
+            IdentificadorDoUsuario);
+        PublicacaoDoEncontro novidade = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontroDoUsuario.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Levarei o gelo.",
+            Agora.AddMinutes(1));
+        PublicacaoDoEncontro publicacaoPropria = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontroDoUsuario.Identificador,
+            IdentificadorDoUsuario,
+            "Levarei os copos.",
+            Agora.AddMinutes(2));
+        PublicacaoDoEncontro publicacaoRemovida = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontroDoUsuario.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Mensagem removida.",
+            Agora.AddMinutes(3));
+        PublicacaoDoEncontro publicacaoAnteriorAoMarcador = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontroDoUsuario.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Mensagem antiga.",
+            Agora);
+        PublicacaoDoEncontro respostaDeOutroUsuario = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontroDoUsuario.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Resposta nova.",
+            Agora.AddMinutes(4),
+            novidade.Identificador);
+        PublicacaoDoEncontro fotoDeOutroUsuario = PublicacaoDoEncontro.CrieComMidia(
+            Guid.NewGuid(),
+            encontroDoUsuario.Identificador,
+            IdentificadorDeOutroUsuario,
+            null,
+            "midias/foto.jpg",
+            "foto.jpg",
+            "image/jpeg",
+            128,
+            Agora.AddMinutes(5));
+        PublicacaoDoEncontro atualizacaoAutomaticaDeOutroUsuario =
+            PublicacaoDoEncontro.CrieAtualizacaoDoSistema(
+                Guid.NewGuid(),
+                encontroDoUsuario.Identificador,
+                IdentificadorDeOutroUsuario,
+                "O encontro foi atualizado.",
+                Agora.AddMinutes(6));
+        publicacaoRemovida.Remova(Agora.AddMinutes(4));
+        ambiente.RepositorioDeEncontros.Publicacoes.AddRange(
+            novidade,
+            publicacaoPropria,
+            publicacaoRemovida,
+            publicacaoAnteriorAoMarcador,
+            respostaDeOutroUsuario,
+            fotoDeOutroUsuario,
+            atualizacaoAutomaticaDeOutroUsuario);
+        ListeEncontrosDoUsuario listeEncontrosDoUsuario = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.Relogio);
+
+        IReadOnlyCollection<EncontroResumoResposta> resposta =
+            await listeEncontrosDoUsuario.ListeProximosAsync(
+                IdentificadorDoUsuario,
+                CancellationToken.None);
+
+        EncontroResumoResposta encontro = Assert.Single(resposta);
+        Assert.Equal(4, encontro.QuantidadeDeNovidades);
+    }
+
+    [Fact]
     public async Task ListePassadosAsync_DeveListarHistoricoDoUsuarioPorParticipante()
     {
         AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
@@ -275,6 +418,42 @@ public sealed class TestesDeEncontros
         Assert.Equal(encontroPassado.Identificador, encontro.Identificador);
         Assert.True(encontro.UsuarioAtualConfirmouPresenca);
         Assert.Equal(1, encontro.QuantidadeDePresencasConfirmadas);
+    }
+
+    [Fact]
+    public async Task ListePassadosAsync_DeveIncluirQuantidadeDeNovidades()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontroPassado = Encontro.CrieSemGrupo(
+            Guid.NewGuid(),
+            "Encontro passado",
+            null,
+            null,
+            InicioPassado,
+            IdentificadorDoUsuario,
+            InicioPassado.AddHours(-1));
+        ambiente.RepositorioDeEncontros.Encontros.Add(encontroPassado);
+        ambiente.RepositorioDeEncontros.Participantes.Add(ParticipanteDoEncontro.CrieOrganizador(
+            Guid.NewGuid(),
+            encontroPassado.Identificador,
+            IdentificadorDoUsuario,
+            InicioPassado.AddHours(-1)));
+        ambiente.RepositorioDeEncontros.Publicacoes.Add(PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontroPassado.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Uma novidade.",
+            Agora.AddMinutes(1)));
+        ListeEncontrosDoUsuario listeEncontrosDoUsuario = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.Relogio);
+
+        IReadOnlyCollection<EncontroResumoResposta> resposta =
+            await listeEncontrosDoUsuario.ListePassadosAsync(
+                IdentificadorDoUsuario,
+                CancellationToken.None);
+
+        Assert.Equal(1, Assert.Single(resposta).QuantidadeDeNovidades);
     }
 
     [Fact]
@@ -697,6 +876,7 @@ public sealed class TestesDeEncontros
         EditeEncontro editeEncontro = new(
             ambiente.RepositorioDeGrupos,
             ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
             ambiente.ServicoDeNotificacoes,
             ambiente.Relogio,
             ambiente.UnidadeDeTrabalho);
@@ -735,6 +915,7 @@ public sealed class TestesDeEncontros
         EditeEncontro editeEncontro = new(
             ambiente.RepositorioDeGrupos,
             ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
             ambiente.ServicoDeNotificacoes,
             ambiente.Relogio,
             ambiente.UnidadeDeTrabalho);
@@ -750,6 +931,10 @@ public sealed class TestesDeEncontros
         await editeEncontro.EditeAsync(comando, CancellationToken.None);
 
         Assert.Equal("Titulo editado", encontro.Titulo);
+        PublicacaoDoEncontro publicacao = Assert.Single(ambiente.RepositorioDeEncontros.Publicacoes);
+        Assert.Equal(
+            "Maria Souza atualizou os dados do encontro: data/horário e título.",
+            publicacao.Texto);
     }
 
     [Fact]
@@ -765,6 +950,7 @@ public sealed class TestesDeEncontros
         EditeEncontro editeEncontro = new(
             ambiente.RepositorioDeGrupos,
             ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
             ambiente.ServicoDeNotificacoes,
             ambiente.Relogio,
             ambiente.UnidadeDeTrabalho);
@@ -791,6 +977,7 @@ public sealed class TestesDeEncontros
         EditeEncontro editeEncontro = new(
             ambiente.RepositorioDeGrupos,
             ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
             ambiente.ServicoDeNotificacoes,
             ambiente.Relogio,
             ambiente.UnidadeDeTrabalho);
@@ -822,6 +1009,7 @@ public sealed class TestesDeEncontros
         EditeEncontro editeEncontro = new(
             ambiente.RepositorioDeGrupos,
             ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
             ambiente.ServicoDeNotificacoes,
             ambiente.Relogio,
             ambiente.UnidadeDeTrabalho);
@@ -852,6 +1040,7 @@ public sealed class TestesDeEncontros
         EditeEncontro editeEncontro = new(
             ambiente.RepositorioDeGrupos,
             ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
             ambiente.ServicoDeNotificacoes,
             ambiente.Relogio,
             ambiente.UnidadeDeTrabalho);
@@ -922,19 +1111,25 @@ public sealed class TestesDeEncontros
             IdentificadorDoUsuario,
             encontro.Identificador,
             "Mesa pronta",
-            "foto.jpg",
-            "image/jpeg",
-            500,
-            new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xD9]));
+            [new(
+                "foto.jpg",
+                "image/jpeg",
+                500,
+                new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xD9])),
+             new(
+                "foto-2.jpg",
+                "image/jpeg",
+                500,
+                new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xD9]))]);
 
         MemoriaDoEncontroResposta resposta = await crieMemoriaDoEncontro.CrieAsync(comando, CancellationToken.None);
 
         Assert.Equal(encontro.Identificador, resposta.IdentificadorDoEncontro);
         Assert.Equal("Mesa pronta", resposta.Legenda);
         Assert.True(resposta.UsuarioAtual);
-        Assert.Single(resposta.Midias);
+        Assert.Equal(2, resposta.Midias.Count);
         Assert.Single(ambiente.RepositorioDeMemoriasDoEncontro.Memorias);
-        Assert.Single(ambiente.RepositorioDeMemoriasDoEncontro.Midias);
+        Assert.Equal(2, ambiente.RepositorioDeMemoriasDoEncontro.Midias.Count);
         Assert.True(ambiente.UnidadeDeTrabalho.AlteracoesForamSalvas);
     }
 
@@ -954,16 +1149,21 @@ public sealed class TestesDeEncontros
             IdentificadorDoUsuario,
             encontro.Identificador,
             "Mesa pronta",
-            "foto.jpg",
-            "image/jpeg",
-            500,
-            new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xD9]));
+            [new(
+                "video.mp4",
+                "video/mp4",
+                500,
+                new MemoryStream([
+                    0x00, 0x00, 0x00, 0x0C,
+                    0x66, 0x74, 0x79, 0x70,
+                    0x69, 0x73, 0x6F, 0x6D
+                ]))]);
 
         MemoriaDoEncontroResposta resposta = await crieMemoriaDoEncontro.CrieAsync(comando, CancellationToken.None);
 
         Assert.Equal(encontro.Identificador, resposta.IdentificadorDoEncontro);
         Assert.Equal("Mesa pronta", resposta.Legenda);
-        Assert.Single(resposta.Midias);
+        Assert.Equal("video/mp4", Assert.Single(resposta.Midias).TipoDeConteudo);
         Assert.Single(ambiente.RepositorioDeMemoriasDoEncontro.Memorias);
     }
 
@@ -984,10 +1184,11 @@ public sealed class TestesDeEncontros
             IdentificadorDoUsuario,
             encontro.Identificador,
             "Mesa pronta",
-            "foto.jpg",
-            "image/jpeg",
-            500,
-            new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xD9]));
+            [new(
+                "foto.jpg",
+                "image/jpeg",
+                500,
+                new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xD9]))]);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             crieMemoriaDoEncontro.CrieAsync(comando, CancellationToken.None));
@@ -1012,10 +1213,11 @@ public sealed class TestesDeEncontros
             IdentificadorDoUsuario,
             encontro.Identificador,
             "Arquivo",
-            "arquivo.pdf",
-            "application/pdf",
-            500,
-            new MemoryStream([1, 2, 3]));
+            [new(
+                "arquivo.pdf",
+                "application/pdf",
+                500,
+                new MemoryStream([1, 2, 3]))]);
 
         await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
             crieMemoriaDoEncontro.CrieAsync(comando, CancellationToken.None));
@@ -1135,6 +1337,380 @@ public sealed class TestesDeEncontros
             removaMemoriaDoEncontro.RemovaAsync(comando, CancellationToken.None));
 
         Assert.Empty(ambiente.ArmazenamentoDeMidiasDeMemoria.ReferenciasRemovidas);
+    }
+
+    [Fact]
+    public async Task CriePublicacaoAsync_DeveResponderPublicacaoValida()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto(
+            "Resenha",
+            InicioFuturo,
+            IdentificadorDoUsuario);
+        PublicacaoDoEncontro original = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Levo o gelo.",
+            Agora);
+        ambiente.RepositorioDeEncontros.Publicacoes.Add(original);
+        CriePublicacaoDoEncontro casoDeUso = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+        CriePublicacaoDoEncontroComando comando = new(
+            encontro.Identificador,
+            IdentificadorDoUsuario,
+            "Obrigado!",
+            Guid.NewGuid(),
+            original.Identificador);
+
+        PublicacaoDoEncontroResposta resposta = await casoDeUso.CrieAsync(
+            comando,
+            CancellationToken.None);
+
+        Assert.Equal(original.Identificador, resposta.PublicacaoRespondida?.Identificador);
+        Assert.Equal("Joao Silva", resposta.PublicacaoRespondida?.NomeDoAutor);
+        Assert.Equal("Levo o gelo.", resposta.PublicacaoRespondida?.Texto);
+        Assert.False(resposta.PublicacaoRespondida?.TemMidia);
+        Assert.False(resposta.PublicacaoRespondida?.FoiRemovida);
+        Assert.Equal(
+            original.Identificador,
+            Assert.Single(
+                ambiente.RepositorioDeEncontros.Publicacoes,
+                publicacao => publicacao.Identificador != original.Identificador)
+                .IdentificadorDaPublicacaoRespondida);
+    }
+
+    [Fact]
+    public async Task CriePublicacaoAsync_DeveRejeitarOriginalDeOutroEncontro()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto(
+            "Resenha",
+            InicioFuturo,
+            IdentificadorDoUsuario);
+        Encontro outroEncontro = ambiente.CrieEncontroDireto(
+            "Outro encontro",
+            InicioFuturo,
+            IdentificadorDeOutroUsuario);
+        PublicacaoDoEncontro original = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            outroEncontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Mensagem externa.",
+            Agora);
+        ambiente.RepositorioDeEncontros.Publicacoes.Add(original);
+        CriePublicacaoDoEncontro casoDeUso = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+        CriePublicacaoDoEncontroComando comando = new(
+            encontro.Identificador,
+            IdentificadorDoUsuario,
+            "Resposta inválida.",
+            Guid.NewGuid(),
+            original.Identificador);
+
+        await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
+            casoDeUso.CrieAsync(comando, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CriePublicacaoAsync_DeveRejeitarOriginalInexistente()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto(
+            "Resenha",
+            InicioFuturo,
+            IdentificadorDoUsuario);
+        CriePublicacaoDoEncontro casoDeUso = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+        CriePublicacaoDoEncontroComando comando = new(
+            encontro.Identificador,
+            IdentificadorDoUsuario,
+            "Resposta inválida.",
+            Guid.NewGuid(),
+            Guid.NewGuid());
+
+        await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
+            casoDeUso.CrieAsync(comando, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task CriePublicacaoAsync_DeveRejeitarAtualizacaoAutomaticaERemovida()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto(
+            "Resenha",
+            InicioFuturo,
+            IdentificadorDoUsuario);
+        PublicacaoDoEncontro atualizacao = PublicacaoDoEncontro.CrieAtualizacaoDoSistema(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDoUsuario,
+            "Combinado criado.",
+            Agora);
+        PublicacaoDoEncontro removida = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Mensagem removida.",
+            Agora);
+        removida.Remova(Agora.AddMinutes(1));
+        ambiente.RepositorioDeEncontros.Publicacoes.AddRange(atualizacao, removida);
+        CriePublicacaoDoEncontro casoDeUso = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+
+        foreach (Guid identificadorDaOriginal in new[] { atualizacao.Identificador, removida.Identificador })
+        {
+            CriePublicacaoDoEncontroComando comando = new(
+                encontro.Identificador,
+                IdentificadorDoUsuario,
+                "Resposta inválida.",
+                Guid.NewGuid(),
+                identificadorDaOriginal);
+
+            await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
+                casoDeUso.CrieAsync(comando, CancellationToken.None));
+        }
+    }
+
+    [Fact]
+    public async Task CriePublicacaoAsync_DeveConsiderarOriginalNaIdempotencia()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto(
+            "Resenha",
+            InicioFuturo,
+            IdentificadorDoUsuario);
+        PublicacaoDoEncontro primeiraOriginal = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Primeira.",
+            Agora);
+        PublicacaoDoEncontro segundaOriginal = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Segunda.",
+            Agora);
+        ambiente.RepositorioDeEncontros.Publicacoes.AddRange(primeiraOriginal, segundaOriginal);
+        CriePublicacaoDoEncontro casoDeUso = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+        Guid identificadorDaOperacao = Guid.NewGuid();
+        CriePublicacaoDoEncontroComando primeiroComando = new(
+            encontro.Identificador,
+            IdentificadorDoUsuario,
+            "Resposta.",
+            identificadorDaOperacao,
+            primeiraOriginal.Identificador);
+        CriePublicacaoDoEncontroComando segundoComando = primeiroComando with
+        {
+            IdentificadorDaPublicacaoRespondida = segundaOriginal.Identificador
+        };
+
+        await casoDeUso.CrieAsync(primeiroComando, CancellationToken.None);
+
+        await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
+            casoDeUso.CrieAsync(segundoComando, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ListePublicacoesAsync_DeveManterRespostaQuandoOriginalForRemovida()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto(
+            "Resenha",
+            InicioFuturo,
+            IdentificadorDoUsuario);
+        PublicacaoDoEncontro original = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Texto que será removido.",
+            Agora);
+        PublicacaoDoEncontro respostaDaOriginal = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDoUsuario,
+            "Minha resposta permanece.",
+            Agora.AddMinutes(1),
+            original.Identificador);
+        original.Remova(Agora.AddMinutes(2));
+        ambiente.RepositorioDeEncontros.Publicacoes.AddRange(original, respostaDaOriginal);
+        ListePublicacoesDoEncontro casoDeUso = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios);
+
+        IReadOnlyCollection<PublicacaoDoEncontroResposta> publicacoes = await casoDeUso.ListeAsync(
+            encontro.Identificador,
+            IdentificadorDoUsuario,
+            CancellationToken.None);
+
+        PublicacaoDoEncontroResposta resposta = Assert.Single(publicacoes);
+        Assert.Equal(respostaDaOriginal.Identificador, resposta.Identificador);
+        Assert.True(resposta.PublicacaoRespondida?.FoiRemovida);
+        Assert.Null(resposta.PublicacaoRespondida?.Texto);
+        Assert.False(resposta.PublicacaoRespondida?.TemMidia);
+    }
+
+    [Fact]
+    public async Task AlterePapelAsync_DevePermitirQueCriadorPromovaERebaixeParticipante()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Encontro administrado", InicioFuturo, IdentificadorDoUsuario);
+        ambiente.RepositorioDeEncontros.Participantes.Add(ParticipanteDoEncontro.CrieConfirmadoPorLink(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            Agora));
+        AlterePapelDoParticipanteDoEncontro alterePapel = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.UnidadeDeTrabalho);
+
+        ParticipanteDoEncontroResposta promovido = await alterePapel.AltereAsync(
+            new(
+                IdentificadorDoUsuario,
+                encontro.Identificador,
+                IdentificadorDeOutroUsuario,
+                PapelDoParticipanteDoEncontro.Administrador),
+            CancellationToken.None);
+        ParticipanteDoEncontroResposta rebaixado = await alterePapel.AltereAsync(
+            new(
+                IdentificadorDoUsuario,
+                encontro.Identificador,
+                IdentificadorDeOutroUsuario,
+                PapelDoParticipanteDoEncontro.Convidado),
+            CancellationToken.None);
+
+        Assert.Equal("Administrador", promovido.Papel);
+        Assert.Equal("Convidado", rebaixado.Papel);
+        Assert.True(ambiente.UnidadeDeTrabalho.AlteracoesForamSalvas);
+    }
+
+    [Fact]
+    public async Task AlterePapelAsync_DeveBloquearAdministrador()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Encontro administrado", InicioFuturo, IdentificadorDoUsuario);
+        ParticipanteDoEncontro administrador = ParticipanteDoEncontro.CrieConfirmadoPorLink(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            Agora);
+        administrador.AlterePapel(PapelDoParticipanteDoEncontro.Administrador);
+        ambiente.RepositorioDeEncontros.Participantes.Add(administrador);
+        AlterePapelDoParticipanteDoEncontro alterePapel = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.UnidadeDeTrabalho);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            alterePapel.AltereAsync(
+                new(
+                    IdentificadorDeOutroUsuario,
+                    encontro.Identificador,
+                    IdentificadorDeOutroUsuario,
+                    PapelDoParticipanteDoEncontro.Convidado),
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AlterePapelAsync_DeveBloquearAlteracaoDoCriador()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Encontro administrado", InicioFuturo, IdentificadorDoUsuario);
+        AlterePapelDoParticipanteDoEncontro alterePapel = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.UnidadeDeTrabalho);
+
+        await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
+            alterePapel.AltereAsync(
+                new(
+                    IdentificadorDoUsuario,
+                    encontro.Identificador,
+                    IdentificadorDoUsuario,
+                    PapelDoParticipanteDoEncontro.Administrador),
+                CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task MarqueVisualizacaoAsync_DeveAvancarAteDataDaPublicacao()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto(
+            "Encontro com novidades",
+            InicioFuturo,
+            IdentificadorDoUsuario);
+        ParticipanteDoEncontro participante = Assert.Single(
+            ambiente.RepositorioDeEncontros.Participantes);
+        PublicacaoDoEncontro publicacao = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Novidade.",
+            Agora.AddMinutes(5));
+        ambiente.RepositorioDeEncontros.Publicacoes.Add(publicacao);
+        MarqueVisualizacaoDoEncontro marqueVisualizacao = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.UnidadeDeTrabalho);
+
+        await marqueVisualizacao.MarqueAsync(
+            new(
+                encontro.Identificador,
+                IdentificadorDoUsuario,
+                publicacao.Identificador),
+            CancellationToken.None);
+
+        Assert.Equal(publicacao.PublicadoEm, participante.VisualizadoAteEm);
+        Assert.True(ambiente.UnidadeDeTrabalho.AlteracoesForamSalvas);
+    }
+
+    [Fact]
+    public async Task MarqueVisualizacaoAsync_DeveRejeitarPublicacaoDeOutroEncontro()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto(
+            "Encontro com novidades",
+            InicioFuturo,
+            IdentificadorDoUsuario);
+        Encontro outroEncontro = ambiente.CrieEncontroDireto(
+            "Outro encontro",
+            InicioFuturo,
+            IdentificadorDeOutroUsuario);
+        PublicacaoDoEncontro publicacao = PublicacaoDoEncontro.Crie(
+            Guid.NewGuid(),
+            outroEncontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            "Mensagem externa.",
+            Agora.AddMinutes(5));
+        ambiente.RepositorioDeEncontros.Publicacoes.Add(publicacao);
+        MarqueVisualizacaoDoEncontro marqueVisualizacao = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.UnidadeDeTrabalho);
+
+        await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
+            marqueVisualizacao.MarqueAsync(
+                new(
+                    encontro.Identificador,
+                    IdentificadorDoUsuario,
+                    publicacao.Identificador),
+                CancellationToken.None));
     }
 
     private sealed class AmbienteDeTeste
@@ -1476,6 +2052,22 @@ public sealed class TestesDeEncontros
             return Task.FromResult(participante);
         }
 
+        public Task AvanceVisualizacaoAteAsync(
+            Guid identificadorDoEncontro,
+            Guid identificadorDoUsuario,
+            DateTimeOffset visualizadoAteEm,
+            CancellationToken cancellationToken)
+        {
+            ParticipanteDoEncontro? participante = Participantes.FirstOrDefault(participanteAtual =>
+                participanteAtual.IdentificadorDoEncontro == identificadorDoEncontro &&
+                participanteAtual.IdentificadorDoUsuario == identificadorDoUsuario &&
+                participanteAtual.Situacao != SituacaoDoParticipanteDoEncontro.Removido);
+
+            participante?.AvanceVisualizacaoAte(visualizadoAteEm);
+
+            return Task.CompletedTask;
+        }
+
         public Task<IReadOnlyCollection<ParticipanteDoEncontro>> ListeParticipantesDosEncontrosAsync(
             IReadOnlyCollection<Guid> identificadoresDosEncontros,
             CancellationToken cancellationToken)
@@ -1484,6 +2076,34 @@ public sealed class TestesDeEncontros
                 .Where(participante => identificadoresDosEncontros.Contains(participante.IdentificadorDoEncontro))];
 
             return Task.FromResult(participantes);
+        }
+
+        public Task<IReadOnlyDictionary<Guid, int>> ObtenhaQuantidadesDeNovidadesAsync(
+            IReadOnlyCollection<Guid> identificadoresDosEncontros,
+            Guid identificadorDoUsuario,
+            CancellationToken cancellationToken)
+        {
+            Dictionary<Guid, int> quantidades = Participantes
+                .Where(participante =>
+                    identificadoresDosEncontros.Contains(participante.IdentificadorDoEncontro) &&
+                    participante.IdentificadorDoUsuario == identificadorDoUsuario &&
+                    participante.Situacao != SituacaoDoParticipanteDoEncontro.Convidado &&
+                    participante.Situacao != SituacaoDoParticipanteDoEncontro.Removido)
+                .Select(participante => new
+                {
+                    participante.IdentificadorDoEncontro,
+                    Quantidade = Publicacoes.Count(publicacao =>
+                        publicacao.IdentificadorDoEncontro == participante.IdentificadorDoEncontro &&
+                        !publicacao.EstaRemovida &&
+                        publicacao.IdentificadorDoUsuarioAutor != identificadorDoUsuario &&
+                        publicacao.PublicadoEm > participante.VisualizadoAteEm)
+                })
+                .Where(item => item.Quantidade > 0)
+                .ToDictionary(
+                    item => item.IdentificadorDoEncontro,
+                    item => item.Quantidade);
+
+            return Task.FromResult<IReadOnlyDictionary<Guid, int>>(quantidades);
         }
 
         public Task<IReadOnlyCollection<PresencaNoEncontro>> ListePresencasDoEncontroAsync(
@@ -1519,6 +2139,16 @@ public sealed class TestesDeEncontros
                 publicacaoAtual.Identificador == identificadorDaPublicacao);
 
             return Task.FromResult(publicacao);
+        }
+
+        public Task<IReadOnlyCollection<PublicacaoDoEncontro>> ObtenhaPublicacoesAsync(
+            IReadOnlyCollection<Guid> identificadoresDasPublicacoes,
+            CancellationToken cancellationToken)
+        {
+            IReadOnlyCollection<PublicacaoDoEncontro> publicacoes = [.. Publicacoes
+                .Where(publicacao => identificadoresDasPublicacoes.Contains(publicacao.Identificador))];
+
+            return Task.FromResult(publicacoes);
         }
 
         public Task<IReadOnlyCollection<PublicacaoDoEncontro>> ListePublicacoesDoEncontroAsync(

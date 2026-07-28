@@ -9,4 +9,5 @@ public sealed record RespostaDeEncontroResumo(
     string Situacao,
     int QuantidadeDePresencasConfirmadas,
     bool UsuarioAtualConfirmouPresenca,
-    string? Tipo = null);
+    string? Tipo = null,
+    int QuantidadeDeNovidades = 0);

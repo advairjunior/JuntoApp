@@ -63,6 +63,9 @@ public sealed class MapeamentoDePublicacaoDoEncontro : IEntityTypeConfiguration<
             .HasDefaultValue(false)
             .IsRequired();
 
+        construtor.Property(publicacao => publicacao.IdentificadorDaPublicacaoRespondida)
+            .HasColumnName("identificador_da_publicacao_respondida");
+
         construtor.Property(publicacao => publicacao.CriadoEm)
             .HasColumnName("criado_em")
             .HasConversion(ConversorDeData)
@@ -95,6 +98,11 @@ public sealed class MapeamentoDePublicacaoDoEncontro : IEntityTypeConfiguration<
         construtor.HasOne<Usuario>()
             .WithMany()
             .HasForeignKey(publicacao => publicacao.IdentificadorDoUsuarioAutor)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        construtor.HasOne<PublicacaoDoEncontro>()
+            .WithMany()
+            .HasForeignKey(publicacao => publicacao.IdentificadorDaPublicacaoRespondida)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

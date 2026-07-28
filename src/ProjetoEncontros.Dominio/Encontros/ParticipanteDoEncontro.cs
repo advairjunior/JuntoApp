@@ -32,6 +32,7 @@ public sealed class ParticipanteDoEncontro : Entidade
         Papel = papel;
         Situacao = situacao;
         ConvidadoEm = convidadoEm;
+        VisualizadoAteEm = convidadoEm;
     }
 
     public Guid IdentificadorDoEncontro { get; private set; }
@@ -46,11 +47,14 @@ public sealed class ParticipanteDoEncontro : Entidade
 
     public DateTimeOffset? RespondidoEm { get; private set; }
 
+    public DateTimeOffset VisualizadoAteEm { get; private set; }
+
     public bool EhOrganizador
     {
         get
         {
-            return Papel == PapelDoParticipanteDoEncontro.Organizador;
+            return Papel == PapelDoParticipanteDoEncontro.Organizador ||
+                   Papel == PapelDoParticipanteDoEncontro.Administrador;
         }
     }
 
@@ -95,6 +99,24 @@ public sealed class ParticipanteDoEncontro : Entidade
             convidadoEm);
     }
 
+    public static ParticipanteDoEncontro CrieConfirmadoPorLink(
+        Guid identificador,
+        Guid identificadorDoEncontro,
+        Guid identificadorDoUsuario,
+        DateTimeOffset confirmadoEm)
+    {
+        return new(
+            identificador,
+            identificadorDoEncontro,
+            identificadorDoUsuario,
+            PapelDoParticipanteDoEncontro.Convidado,
+            SituacaoDoParticipanteDoEncontro.Confirmado,
+            confirmadoEm)
+        {
+            RespondidoEm = confirmadoEm
+        };
+    }
+
     public void Confirme(DateTimeOffset respondidoEm)
     {
         GarantaQueNaoFoiRemovido();
@@ -119,6 +141,24 @@ public sealed class ParticipanteDoEncontro : Entidade
         RespondidoEm = respondidoEm;
     }
 
+    public void AlterePapel(PapelDoParticipanteDoEncontro papel)
+    {
+        GarantaQueNaoFoiRemovido();
+
+        if (Papel == PapelDoParticipanteDoEncontro.Organizador)
+        {
+            throw new ExcecaoDeDominioException("O papel do criador do encontro não pode ser alterado.");
+        }
+
+        if (papel != PapelDoParticipanteDoEncontro.Convidado &&
+            papel != PapelDoParticipanteDoEncontro.Administrador)
+        {
+            throw new ExcecaoDeDominioException("O papel do participante deve ser Convidado ou Administrador.");
+        }
+
+        Papel = papel;
+    }
+
     public void Remova(DateTimeOffset removidoEm)
     {
         if (Situacao == SituacaoDoParticipanteDoEncontro.Removido)
@@ -128,11 +168,21 @@ public sealed class ParticipanteDoEncontro : Entidade
 
         if (EhOrganizador)
         {
-            throw new ExcecaoDeDominioException("O organizador do encontro não pode ser removido nesta versão.");
+            throw new ExcecaoDeDominioException("Participante com papel administrativo não pode ser removido diretamente.");
         }
 
         Situacao = SituacaoDoParticipanteDoEncontro.Removido;
         RespondidoEm = removidoEm;
+    }
+
+    public void AvanceVisualizacaoAte(DateTimeOffset visualizadoAteEm)
+    {
+        if (visualizadoAteEm <= VisualizadoAteEm)
+        {
+            return;
+        }
+
+        VisualizadoAteEm = visualizadoAteEm;
     }
 
     private void GarantaQueNaoFoiRemovido()

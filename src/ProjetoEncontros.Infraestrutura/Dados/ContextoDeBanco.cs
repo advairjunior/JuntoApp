@@ -91,6 +91,14 @@ public sealed class ContextoDeBanco(DbContextOptions<ContextoDeBanco> opcoes) : 
         }
     }
 
+    public DbSet<ConviteDoEncontroPorLink> ConvitesDoEncontroPorLink
+    {
+        get
+        {
+            return Set<ConviteDoEncontroPorLink>();
+        }
+    }
+
     public DbSet<PublicacaoDoEncontro> PublicacoesDoEncontro
     {
         get
@@ -151,6 +159,7 @@ public sealed class ContextoDeBanco(DbContextOptions<ContextoDeBanco> opcoes) : 
         construtorDeModelo.ApplyConfiguration(new MapeamentoDeEncontro());
         construtorDeModelo.ApplyConfiguration(new MapeamentoDePresencaNoEncontro());
         construtorDeModelo.ApplyConfiguration(new MapeamentoDeParticipanteDoEncontro());
+        construtorDeModelo.ApplyConfiguration(new MapeamentoDeConviteDoEncontroPorLink());
         construtorDeModelo.ApplyConfiguration(new MapeamentoDePublicacaoDoEncontro());
         construtorDeModelo.ApplyConfiguration(new MapeamentoDeMemoriaDoEncontro());
         construtorDeModelo.ApplyConfiguration(new MapeamentoDeMidiaDaMemoria());

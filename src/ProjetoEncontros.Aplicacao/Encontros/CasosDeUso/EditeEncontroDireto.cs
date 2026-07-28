@@ -2,6 +2,7 @@ using ProjetoEncontros.Aplicacao.Compartilhado;
 using ProjetoEncontros.Aplicacao.Encontros.Contratos;
 using ProjetoEncontros.Aplicacao.Encontros.Interfaces;
 using ProjetoEncontros.Aplicacao.Notificacoes.Interfaces;
+using ProjetoEncontros.Aplicacao.Usuarios.Interfaces;
 using ProjetoEncontros.Dominio.Encontros;
 using ProjetoEncontros.Dominio.Notificacoes;
 
@@ -9,6 +10,7 @@ namespace ProjetoEncontros.Aplicacao.Encontros.CasosDeUso;
 
 public sealed class EditeEncontroDireto(
     IRepositorioDeEncontros repositorioDeEncontros,
+    IRepositorioDeUsuarios repositorioDeUsuarios,
     IServicoDeNotificacoes servicoDeNotificacoes,
     IRelogio relogio,
     IUnidadeDeTrabalho unidadeDeTrabalho)
@@ -27,15 +29,26 @@ public sealed class EditeEncontroDireto(
 
         GarantaQueEhOrganizador(participante);
 
+        DadosAnterioresDoEncontro dadosAnteriores = DadosAnterioresDoEncontro.Capture(encontro);
+        DateTimeOffset agora = relogio.Agora;
         encontro.AltereDados(
             comando.Titulo,
             comando.Descricao,
             comando.Local,
             comando.InicioEm,
-            relogio.Agora,
+            agora,
             comando.Tipo,
             comando.Latitude,
             comando.Longitude);
+
+        await AtualizacaoDosDadosDoEncontro.RegistreAsync(
+            repositorioDeEncontros,
+            repositorioDeUsuarios,
+            encontro,
+            dadosAnteriores,
+            comando.IdentificadorDoUsuario,
+            agora,
+            cancellationToken);
 
         await NotifiqueParticipantesAsync(
             encontro,

@@ -52,19 +52,33 @@ public sealed class ListeEncontrosDoUsuario(
         IReadOnlyCollection<ParticipanteDoEncontro> participantes = await repositorioDeEncontros.ListeParticipantesDosEncontrosAsync(
             encontros.Select(encontro => encontro.Identificador).ToList(),
             cancellationToken);
-        IEnumerable<Encontro> encontrosVisiveis = encontros
-            .Where(encontro => UsuarioJaRespondeu(encontro, participantes, identificadorDoUsuario));
+        List<Encontro> encontrosVisiveis = encontros
+            .Where(encontro => UsuarioJaRespondeu(encontro, participantes, identificadorDoUsuario))
+            .ToList();
+        IReadOnlyDictionary<Guid, int> quantidadesDeNovidades =
+            await repositorioDeEncontros.ObtenhaQuantidadesDeNovidadesAsync(
+                encontrosVisiveis.Select(encontro => encontro.Identificador).ToList(),
+                identificadorDoUsuario,
+                cancellationToken);
 
         if (ordenarDecrescente)
         {
-            encontrosVisiveis = encontrosVisiveis.OrderByDescending(encontro => encontro.InicioEm);
+            encontrosVisiveis = encontrosVisiveis
+                .OrderByDescending(encontro => encontro.InicioEm)
+                .ToList();
         }
         else
         {
-            encontrosVisiveis = encontrosVisiveis.OrderBy(encontro => encontro.InicioEm);
+            encontrosVisiveis = encontrosVisiveis
+                .OrderBy(encontro => encontro.InicioEm)
+                .ToList();
         }
 
-        return [.. encontrosVisiveis.Select(encontro => CrieResposta(encontro, participantes, identificadorDoUsuario))];
+        return [.. encontrosVisiveis.Select(encontro => CrieResposta(
+            encontro,
+            participantes,
+            identificadorDoUsuario,
+            ObtenhaQuantidadeDeNovidades(encontro, quantidadesDeNovidades)))];
     }
 
     private static void ValideUsuarioAutenticado(Guid identificadorDoUsuario)
@@ -92,7 +106,8 @@ public sealed class ListeEncontrosDoUsuario(
     private static EncontroResumoResposta CrieResposta(
         Encontro encontro,
         IReadOnlyCollection<ParticipanteDoEncontro> participantes,
-        Guid identificadorDoUsuario)
+        Guid identificadorDoUsuario,
+        int quantidadeDeNovidades)
     {
         IReadOnlyCollection<ParticipanteDoEncontro> participantesDoEncontro = [.. participantes
             .Where(participante => participante.IdentificadorDoEncontro == encontro.Identificador)];
@@ -112,6 +127,18 @@ public sealed class ListeEncontrosDoUsuario(
             encontro.Situacao.ToString(),
             quantidadeDePresencasConfirmadas,
             usuarioAtualConfirmouPresenca,
-            encontro.Tipo);
+            encontro.Tipo,
+            quantidadeDeNovidades);
+    }
+
+    private static int ObtenhaQuantidadeDeNovidades(
+        Encontro encontro,
+        IReadOnlyDictionary<Guid, int> quantidadesDeNovidades)
+    {
+        return quantidadesDeNovidades.TryGetValue(
+            encontro.Identificador,
+            out int quantidadeDeNovidades)
+            ? quantidadeDeNovidades
+            : 0;
     }
 }

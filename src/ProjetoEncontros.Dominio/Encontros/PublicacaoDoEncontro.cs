@@ -24,7 +24,8 @@ public sealed class PublicacaoDoEncontro : Entidade
         string? tipoDeConteudoDaMidia,
         long? tamanhoDaMidiaEmBytes,
         DateTimeOffset publicadoEm,
-        bool ehAtualizacaoDoSistema)
+        bool ehAtualizacaoDoSistema,
+        Guid? identificadorDaPublicacaoRespondida)
         : base(identificador, publicadoEm)
     {
         if (identificadorDoEncontro == Guid.Empty)
@@ -46,8 +47,10 @@ public sealed class PublicacaoDoEncontro : Entidade
         TamanhoDaMidiaEmBytes = tamanhoDaMidiaEmBytes;
         PublicadoEm = publicadoEm;
         EhAtualizacaoDoSistema = ehAtualizacaoDoSistema;
+        IdentificadorDaPublicacaoRespondida = identificadorDaPublicacaoRespondida;
 
         ValideMidia();
+        ValidePublicacaoRespondida();
     }
 
     public Guid IdentificadorDoEncontro { get; private set; }
@@ -67,6 +70,8 @@ public sealed class PublicacaoDoEncontro : Entidade
     public DateTimeOffset PublicadoEm { get; private set; }
 
     public bool EhAtualizacaoDoSistema { get; private set; }
+
+    public Guid? IdentificadorDaPublicacaoRespondida { get; private set; }
 
     public DateTimeOffset? RemovidaEm { get; private set; }
 
@@ -91,7 +96,8 @@ public sealed class PublicacaoDoEncontro : Entidade
         Guid identificadorDoEncontro,
         Guid identificadorDoUsuarioAutor,
         string texto,
-        DateTimeOffset publicadoEm)
+        DateTimeOffset publicadoEm,
+        Guid? identificadorDaPublicacaoRespondida = null)
     {
         return new(
             identificador,
@@ -103,7 +109,8 @@ public sealed class PublicacaoDoEncontro : Entidade
             null,
             null,
             publicadoEm,
-            false);
+            false,
+            identificadorDaPublicacaoRespondida);
     }
 
     public static PublicacaoDoEncontro CrieAtualizacaoDoSistema(
@@ -123,7 +130,8 @@ public sealed class PublicacaoDoEncontro : Entidade
             null,
             null,
             publicadoEm,
-            true);
+            true,
+            null);
     }
 
     public static PublicacaoDoEncontro CrieComMidia(
@@ -147,7 +155,8 @@ public sealed class PublicacaoDoEncontro : Entidade
             tipoDeConteudoDaMidia,
             tamanhoDaMidiaEmBytes,
             publicadoEm,
-            false);
+            false,
+            null);
     }
 
     public void Remova(DateTimeOffset removidaEm)
@@ -202,6 +211,32 @@ public sealed class PublicacaoDoEncontro : Entidade
         if (TamanhoDaMidiaEmBytes.Value > TamanhoMaximoDaMidiaEmBytes)
         {
             throw new ExcecaoDeDominioException("A mídia da publicação não pode ultrapassar 10 MB.");
+        }
+    }
+
+    private void ValidePublicacaoRespondida()
+    {
+        if (!IdentificadorDaPublicacaoRespondida.HasValue)
+        {
+            return;
+        }
+
+        if (IdentificadorDaPublicacaoRespondida.Value == Guid.Empty)
+        {
+            throw new ExcecaoDeDominioException(
+                "O identificador da publicação respondida não pode ser vazio.");
+        }
+
+        if (IdentificadorDaPublicacaoRespondida.Value == Identificador)
+        {
+            throw new ExcecaoDeDominioException(
+                "Uma publicação não pode responder a si mesma.");
+        }
+
+        if (EhAtualizacaoDoSistema || TemMidia)
+        {
+            throw new ExcecaoDeDominioException(
+                "Somente publicações de texto podem responder outra publicação.");
         }
     }
 

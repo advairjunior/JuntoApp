@@ -13,6 +13,7 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/dados/repositorio_de_encontros.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/componentes/seletor_de_localizacao_no_mapa.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/encontro_detalhado.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/preferencias_do_aniversario.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/servicos/servico_de_localizacao.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/inicio/estado/controlador_da_pagina_inicial.dart';
 
@@ -27,6 +28,7 @@ const List<_OpcaoDeTipoDoEncontro> _opcoesDeTipoDoEncontro =
   _OpcaoDeTipoDoEncontro('Estudo', Icons.menu_book_outlined),
   _OpcaoDeTipoDoEncontro('Jogo', Icons.sports_esports_outlined),
   _OpcaoDeTipoDoEncontro('Viagem', Icons.luggage_outlined),
+  _OpcaoDeTipoDoEncontro('Aniversário', Icons.cake_outlined),
 ];
 
 class TelaDeCriacaoDeEncontro extends ConsumerStatefulWidget {
@@ -48,6 +50,16 @@ class _EstadoDaTelaDeCriacaoDeEncontro
   final TextEditingController _controladorDoTitulo = TextEditingController();
   final TextEditingController _controladorDoLocal = TextEditingController();
   final TextEditingController _controladorDaDescricao = TextEditingController();
+  final TextEditingController _controladorDoNumeroDoCalcado =
+      TextEditingController();
+  final TextEditingController _controladorDoTamanhoDaCamiseta =
+      TextEditingController();
+  final TextEditingController _controladorDoTamanhoDaCalca =
+      TextEditingController();
+  final TextEditingController _controladorDasSugestoesDePresente =
+      TextEditingController();
+  final TextEditingController _controladorDasCoisasQueGostariaDeGanhar =
+      TextEditingController();
 
   late DateTime _data;
   late TimeOfDay _horario;
@@ -62,6 +74,8 @@ class _EstadoDaTelaDeCriacaoDeEncontro
   double? _longitude;
 
   bool get _estaEditando => widget.identificadorDoEncontro != null;
+  bool get _tipoEhAniversario =>
+      _tipo?.toLowerCase() == 'aniversário'.toLowerCase();
 
   @override
   void initState() {
@@ -80,6 +94,11 @@ class _EstadoDaTelaDeCriacaoDeEncontro
     _controladorDoTitulo.dispose();
     _controladorDoLocal.dispose();
     _controladorDaDescricao.dispose();
+    _controladorDoNumeroDoCalcado.dispose();
+    _controladorDoTamanhoDaCamiseta.dispose();
+    _controladorDoTamanhoDaCalca.dispose();
+    _controladorDasSugestoesDePresente.dispose();
+    _controladorDasCoisasQueGostariaDeGanhar.dispose();
     super.dispose();
   }
 
@@ -202,11 +221,7 @@ class _EstadoDaTelaDeCriacaoDeEncontro
                       _SeletorDoTipoDoEncontro(
                         tipo: _tipo,
                         aoSelecionar: _selecioneTipoAsync,
-                        aoRemover: () {
-                          setState(() {
-                            _tipo = null;
-                          });
-                        },
+                        aoRemover: _removaTipoAsync,
                       ),
                       const SizedBox(height: EspacamentosDoAplicativo.medio),
                       Row(
@@ -255,6 +270,23 @@ class _EstadoDaTelaDeCriacaoDeEncontro
                           },
                         ),
                       ),
+                      if (_tipoEhAniversario) ...<Widget>[
+                        const SizedBox(
+                          height: EspacamentosDoAplicativo.grande,
+                        ),
+                        _PreferenciasDoAniversario(
+                          controladorDoNumeroDoCalcado:
+                              _controladorDoNumeroDoCalcado,
+                          controladorDoTamanhoDaCamiseta:
+                              _controladorDoTamanhoDaCamiseta,
+                          controladorDoTamanhoDaCalca:
+                              _controladorDoTamanhoDaCalca,
+                          controladorDasSugestoesDePresente:
+                              _controladorDasSugestoesDePresente,
+                          controladorDasCoisasQueGostariaDeGanhar:
+                              _controladorDasCoisasQueGostariaDeGanhar,
+                        ),
+                      ],
                       _ControleDaLocalizacao(
                         temCoordenadas: _latitude != null && _longitude != null,
                         podeAdicionar:
@@ -391,6 +423,8 @@ class _EstadoDaTelaDeCriacaoDeEncontro
     try {
       IRepositorioDeEncontros repositorio =
           ref.read(provedorDoRepositorioDeEncontros);
+      PreferenciasDoAniversario preferenciasDoAniversario =
+          _criePreferenciasDoAniversario();
 
       if (_estaEditando) {
         await repositorio.editeEncontroAsync(
@@ -403,6 +437,13 @@ class _EstadoDaTelaDeCriacaoDeEncontro
           inicioEm: inicioEm,
           tipo: _tipo,
         );
+
+        if (_tipoEhAniversario) {
+          await repositorio.alterePreferenciasDoAniversarioAsync(
+            identificador: widget.identificadorDoEncontro!,
+            preferencias: preferenciasDoAniversario,
+          );
+        }
       } else {
         await repositorio.crieEncontroAsync(
           titulo: _controladorDoTitulo.text.trim(),
@@ -412,6 +453,8 @@ class _EstadoDaTelaDeCriacaoDeEncontro
           longitude: _longitude,
           inicioEm: inicioEm,
           tipo: _tipo,
+          preferenciasDoAniversario:
+              _tipoEhAniversario ? preferenciasDoAniversario : null,
         );
       }
 
@@ -517,6 +560,14 @@ class _EstadoDaTelaDeCriacaoDeEncontro
     );
 
     if (tipoSelecionado != null && mounted) {
+      bool podeTrocar = await _confirmeRemocaoDasPreferenciasAsync(
+        tipoSelecionado.isEmpty ? null : tipoSelecionado,
+      );
+
+      if (!podeTrocar || !mounted) {
+        return;
+      }
+
       setState(() {
         _tipo = tipoSelecionado.isEmpty ? null : tipoSelecionado;
       });
@@ -649,6 +700,16 @@ class _EstadoDaTelaDeCriacaoDeEncontro
         );
         _horario = TimeOfDay.fromDateTime(encontro.inicioEm);
         _tipo = encontro.tipo;
+        _controladorDoNumeroDoCalcado.text =
+            encontro.preferenciasDoAniversario?.numeroDoCalcado ?? '';
+        _controladorDoTamanhoDaCamiseta.text =
+            encontro.preferenciasDoAniversario?.tamanhoDaCamiseta ?? '';
+        _controladorDoTamanhoDaCalca.text =
+            encontro.preferenciasDoAniversario?.tamanhoDaCalca ?? '';
+        _controladorDasSugestoesDePresente.text =
+            encontro.preferenciasDoAniversario?.sugestoesDePresente ?? '';
+        _controladorDasCoisasQueGostariaDeGanhar.text =
+            encontro.preferenciasDoAniversario?.coisasQueGostariaDeGanhar ?? '';
       });
     } on ExcecaoDaApi catch (excecao) {
       if (mounted) {
@@ -669,6 +730,183 @@ class _EstadoDaTelaDeCriacaoDeEncontro
   String? _normalizeTextoOpcional(String texto) {
     String textoNormalizado = texto.trim();
     return textoNormalizado.isEmpty ? null : textoNormalizado;
+  }
+
+  PreferenciasDoAniversario _criePreferenciasDoAniversario() {
+    return PreferenciasDoAniversario(
+      numeroDoCalcado:
+          _normalizeTextoOpcional(_controladorDoNumeroDoCalcado.text),
+      tamanhoDaCamiseta:
+          _normalizeTextoOpcional(_controladorDoTamanhoDaCamiseta.text),
+      tamanhoDaCalca:
+          _normalizeTextoOpcional(_controladorDoTamanhoDaCalca.text),
+      sugestoesDePresente:
+          _normalizeTextoOpcional(_controladorDasSugestoesDePresente.text),
+      coisasQueGostariaDeGanhar: _normalizeTextoOpcional(
+        _controladorDasCoisasQueGostariaDeGanhar.text,
+      ),
+    );
+  }
+
+  Future<void> _removaTipoAsync() async {
+    bool podeRemover = await _confirmeRemocaoDasPreferenciasAsync(null);
+
+    if (podeRemover && mounted) {
+      setState(() {
+        _tipo = null;
+      });
+    }
+  }
+
+  Future<bool> _confirmeRemocaoDasPreferenciasAsync(
+    String? novoTipo,
+  ) async {
+    bool novoTipoEhAniversario =
+        novoTipo?.toLowerCase() == 'aniversário'.toLowerCase();
+
+    if (!_tipoEhAniversario ||
+        novoTipoEhAniversario ||
+        !_criePreferenciasDoAniversario().temAlgumaInformacao) {
+      return true;
+    }
+
+    bool? confirmou = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Remover preferências do aniversário?'),
+          content: const Text(
+            'Ao salvar com outro tipo, os tamanhos e as sugestões de presente serão apagados.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Manter aniversário'),
+            ),
+            FilledButton(
+              key: const Key('confirmar-remocao-das-preferencias'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Trocar tipo'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmou ?? false;
+  }
+}
+
+class _PreferenciasDoAniversario extends StatelessWidget {
+  const _PreferenciasDoAniversario({
+    required this.controladorDoNumeroDoCalcado,
+    required this.controladorDoTamanhoDaCamiseta,
+    required this.controladorDoTamanhoDaCalca,
+    required this.controladorDasSugestoesDePresente,
+    required this.controladorDasCoisasQueGostariaDeGanhar,
+  });
+
+  final TextEditingController controladorDoNumeroDoCalcado;
+  final TextEditingController controladorDoTamanhoDaCamiseta;
+  final TextEditingController controladorDoTamanhoDaCalca;
+  final TextEditingController controladorDasSugestoesDePresente;
+  final TextEditingController controladorDasCoisasQueGostariaDeGanhar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('preferencias-do-aniversario'),
+      padding: const EdgeInsets.all(EspacamentosDoAplicativo.padrao),
+      decoration: BoxDecoration(
+        color: CoresDoAplicativo.fundoDoCartaoSuave,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CoresDoAplicativo.bordaSuave),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Preferências do aniversariante',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: EspacamentosDoAplicativo.minimo),
+          const Text(
+            'Tudo é opcional. Participantes confirmados poderão consultar estas informações.',
+            style: TextStyle(color: CoresDoAplicativo.textoSecundario),
+          ),
+          const SizedBox(height: EspacamentosDoAplicativo.padrao),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: TextFormField(
+                  key: const Key('numero-do-calcado'),
+                  controller: controladorDoNumeroDoCalcado,
+                  maxLength: 30,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Número do calçado',
+                    prefixIcon: Icon(Icons.straighten_outlined),
+                  ),
+                ),
+              ),
+              const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+              Expanded(
+                child: TextFormField(
+                  key: const Key('tamanho-da-camiseta'),
+                  controller: controladorDoTamanhoDaCamiseta,
+                  maxLength: 30,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    labelText: 'Camiseta',
+                    prefixIcon: Icon(Icons.checkroom_outlined),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          TextFormField(
+            key: const Key('tamanho-da-calca'),
+            controller: controladorDoTamanhoDaCalca,
+            maxLength: 30,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              labelText: 'Tamanho da calça',
+              prefixIcon: Icon(Icons.checkroom_outlined),
+            ),
+          ),
+          const SizedBox(height: EspacamentosDoAplicativo.pequeno),
+          TextFormField(
+            key: const Key('sugestoes-de-presente'),
+            controller: controladorDasSugestoesDePresente,
+            maxLength: 1000,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Sugestões de presente',
+              hintText: 'Orientações gerais, estilos ou categorias.',
+              alignLabelWithHint: true,
+              prefixIcon: Icon(Icons.card_giftcard_outlined),
+            ),
+          ),
+          const SizedBox(height: EspacamentosDoAplicativo.pequeno),
+          TextFormField(
+            key: const Key('coisas-que-gostaria-de-ganhar'),
+            controller: controladorDasCoisasQueGostariaDeGanhar,
+            maxLength: 1000,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'O que gostaria de ganhar',
+              hintText: 'Desejos específicos do aniversariante.',
+              alignLabelWithHint: true,
+              prefixIcon: Icon(Icons.redeem_outlined),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

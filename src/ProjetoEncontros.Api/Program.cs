@@ -65,6 +65,7 @@ RotasDeGrupos.MapeieRotasDeGrupos(aplicacao);
 RotasDeConvites.MapeieRotasDeConvites(aplicacao);
 RotasDeMembros.MapeieRotasDeMembros(aplicacao);
 RotasDeEncontros.MapeieRotasDeEncontros(aplicacao);
+RotasDeConvitesDoEncontroPorLink.MapeieRotasDeConvitesDoEncontroPorLink(aplicacao);
 RotasDeLocalizacoes.MapeieRotasDeLocalizacoes(aplicacao);
 RotasDeLinhaDoTempo.MapeieRotasDeLinhaDoTempo(aplicacao);
 RotasDeNotificacoes.MapeieRotasDeNotificacoes(aplicacao);

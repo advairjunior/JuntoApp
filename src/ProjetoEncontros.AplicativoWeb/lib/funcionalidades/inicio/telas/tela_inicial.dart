@@ -150,7 +150,6 @@ class _ConteudoDaPagina extends StatelessWidget {
         children: <Widget>[
           CabecalhoDaPagina(
             titulo: 'Olá, ${usuarioAtual.primeiroNome}',
-            subtitulo: 'Que bom ter você aqui.',
             inicio: FotoDePerfil(
               key: const Key('foto-do-usuario-na-inicial'),
               url: usuarioAtual.urlDaFotoDePerfil,
@@ -216,10 +215,7 @@ class _ConteudoDaPagina extends StatelessWidget {
             const SizedBox(height: EspacamentosDoAplicativo.medio),
           ],
           if (proximoEncontro == null) ...<Widget>[
-            const TituloDeSecao(
-              titulo: 'Próximo encontro',
-              subtitulo: 'Sua agenda está livre por enquanto',
-            ),
+            const TituloDeSecao(titulo: 'Próximo encontro'),
             const SizedBox(height: EspacamentosDoAplicativo.medio),
             const CartaoDoAplicativo(
               filho: EstadoVazio(
@@ -230,10 +226,7 @@ class _ConteudoDaPagina extends StatelessWidget {
               ),
             ),
           ] else ...<Widget>[
-            const TituloDeSecao(
-              titulo: 'Próximo encontro',
-              subtitulo: 'O momento mais próximo na sua agenda',
-            ),
+            const TituloDeSecao(titulo: 'Próximo encontro'),
             const SizedBox(height: EspacamentosDoAplicativo.medio),
             _EncontroEmDestaque(
               encontro: proximoEncontro,
@@ -241,21 +234,11 @@ class _ConteudoDaPagina extends StatelessWidget {
             ),
             if (outrosEncontros.isNotEmpty) ...<Widget>[
               const SizedBox(height: EspacamentosDoAplicativo.grande),
-              const TituloDeSecao(
-                titulo: 'Depois desse',
-                subtitulo: 'Outros encontros que já estão combinados',
-              ),
+              const TituloDeSecao(titulo: 'Outros encontros'),
               const SizedBox(height: EspacamentosDoAplicativo.medio),
-              ...outrosEncontros.map(
-                (EncontroResumo encontro) => Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: EspacamentosDoAplicativo.medio,
-                  ),
-                  child: _EncontroCompacto(
-                    encontro: encontro,
-                    aoAbrir: () => aoAbrirEncontro(encontro.identificador),
-                  ),
-                ),
+              _ListaDeEncontros(
+                encontros: outrosEncontros,
+                aoAbrir: aoAbrirEncontro,
               ),
             ],
           ],
@@ -454,105 +437,111 @@ class _EncontroEmDestaque extends StatelessWidget {
 
     return Semantics(
       button: true,
-      label: 'Abrir encontro ${encontro.titulo}',
-      child: Material(
-        color: CoresDoAplicativo.transparente,
-        child: InkWell(
-          onTap: aoAbrir,
-          borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
-          child: Ink(
-            height: 300,
-            decoration: BoxDecoration(
-              color: CoresDoAplicativo.fundoDoCartao,
-              borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
-              border: Border.all(color: CoresDoAplicativo.bordaDiscreta),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
-              child: Stack(
-                fit: StackFit.expand,
-                children: <Widget>[
-                  if (recurso.isEmpty)
-                    _FundoPadraoDoEncontro(inicioEm: encontro.inicioEm)
-                  else
-                    ImagemPrivada(
-                      recurso: recurso,
-                      construaSubstituta: (_) => _FundoPadraoDoEncontro(
-                        inicioEm: encontro.inicioEm,
+      label: _descrevaEncontroParaAcessibilidade(encontro),
+      child: ExcludeSemantics(
+        child: Material(
+          color: CoresDoAplicativo.transparente,
+          child: InkWell(
+            onTap: aoAbrir,
+            borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
+            child: Ink(
+              height: 300,
+              decoration: BoxDecoration(
+                color: CoresDoAplicativo.fundoDoCartao,
+                borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
+                border: Border.all(color: CoresDoAplicativo.bordaDiscreta),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: <Widget>[
+                    if (recurso.isEmpty)
+                      _FundoPadraoDoEncontro(inicioEm: encontro.inicioEm)
+                    else
+                      ImagemPrivada(
+                        recurso: recurso,
+                        construaSubstituta: (_) => _FundoPadraoDoEncontro(
+                          inicioEm: encontro.inicioEm,
+                        ),
                       ),
-                    ),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: <Color>[
-                          Color(0x18000000),
-                          Color(0x50000000),
-                          Color(0xF2050D0B),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: EspacamentosDoAplicativo.padrao,
-                    left: EspacamentosDoAplicativo.padrao,
-                    child: _DataDoEncontro(inicioEm: encontro.inicioEm),
-                  ),
-                  Positioned(
-                    left: EspacamentosDoAplicativo.padrao,
-                    right: EspacamentosDoAplicativo.padrao,
-                    bottom: EspacamentosDoAplicativo.padrao,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          encontro.titulo,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.headlineSmall,
-                        ),
-                        const SizedBox(
-                          height: EspacamentosDoAplicativo.pequeno,
-                        ),
-                        _LinhaDoEncontro(
-                          icone: Icons.schedule_rounded,
-                          texto: DateFormat('HH:mm', 'pt_BR').format(
-                            encontro.inicioEm,
-                          ),
-                        ),
-                        if (encontro.local != null &&
-                            encontro.local!.trim().isNotEmpty) ...<Widget>[
-                          const SizedBox(
-                            height: EspacamentosDoAplicativo.minimo,
-                          ),
-                          _LinhaDoEncontro(
-                            icone: Icons.location_on_outlined,
-                            texto: encontro.local!,
-                          ),
-                        ],
-                        const SizedBox(
-                          height: EspacamentosDoAplicativo.medio,
-                        ),
-                        Wrap(
-                          spacing: EspacamentosDoAplicativo.pequeno,
-                          runSpacing: EspacamentosDoAplicativo.pequeno,
-                          children: <Widget>[
-                            IndicadorDeSituacao(
-                              texto: _descrevaPresencas(encontro),
-                              icone: Icons.people_outline_rounded,
-                            ),
-                            if (encontro.usuarioAtualConfirmouPresenca)
-                              const IndicadorDeSituacao(
-                                texto: 'Você vai',
-                                icone: Icons.check_circle_outline_rounded,
-                              ),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: <Color>[
+                            Color(0x18000000),
+                            Color(0x50000000),
+                            Color(0xF2050D0B),
                           ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
+                    Positioned(
+                      top: EspacamentosDoAplicativo.padrao,
+                      left: EspacamentosDoAplicativo.padrao,
+                      child: _DataDoEncontro(inicioEm: encontro.inicioEm),
+                    ),
+                    if (encontro.quantidadeDeNovidades > 0)
+                      Positioned(
+                        top: EspacamentosDoAplicativo.padrao,
+                        right: EspacamentosDoAplicativo.padrao,
+                        child: _IndicadorDeNovidades(
+                          encontro: encontro,
+                        ),
+                      ),
+                    Positioned(
+                      left: EspacamentosDoAplicativo.padrao,
+                      right: EspacamentosDoAplicativo.padrao,
+                      bottom: EspacamentosDoAplicativo.padrao,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            encontro.titulo,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          const SizedBox(
+                            height: EspacamentosDoAplicativo.pequeno,
+                          ),
+                          _LinhaDoEncontro(
+                            icone: Icons.schedule_rounded,
+                            texto: DateFormat('HH:mm', 'pt_BR').format(
+                              encontro.inicioEm,
+                            ),
+                          ),
+                          if (encontro.local != null &&
+                              encontro.local!.trim().isNotEmpty) ...<Widget>[
+                            const SizedBox(
+                              height: EspacamentosDoAplicativo.minimo,
+                            ),
+                            _LinhaDoEncontro(
+                              icone: Icons.location_on_outlined,
+                              texto: encontro.local!,
+                            ),
+                          ],
+                          const SizedBox(
+                            height: EspacamentosDoAplicativo.medio,
+                          ),
+                          IndicadorDeSituacao(
+                            texto: encontro.usuarioAtualConfirmouPresenca
+                                ? 'Você vai · ${_descrevaPresencas(encontro)}'
+                                : _descrevaPresencas(encontro),
+                            icone: encontro.usuarioAtualConfirmouPresenca
+                                ? Icons.check_circle_outline_rounded
+                                : Icons.people_outline_rounded,
+                            cor: encontro.usuarioAtualConfirmouPresenca
+                                ? CoresDoAplicativo.verdeDestaque
+                                : CoresDoAplicativo.textoSecundario,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -577,65 +566,171 @@ class _EncontroCompacto extends StatelessWidget {
       encontro.urlDaImagemDeCapa,
     );
 
-    return CartaoDoAplicativo(
-      aoTocar: aoAbrir,
-      preenchimento: EdgeInsets.zero,
-      filho: SizedBox(
-        height: 112,
-        child: Row(
-          children: <Widget>[
-            SizedBox(
-              width: 104,
-              child: recurso.isEmpty
-                  ? _FundoPadraoDoEncontro(inicioEm: encontro.inicioEm)
-                  : ImagemPrivada(
-                      recurso: recurso,
-                      construaSubstituta: (_) => _FundoPadraoDoEncontro(
-                        inicioEm: encontro.inicioEm,
-                      ),
+    return Semantics(
+      button: true,
+      label: _descrevaEncontroParaAcessibilidade(encontro),
+      child: ExcludeSemantics(
+        child: InkWell(
+          onTap: aoAbrir,
+          child: SizedBox(
+            height: 106,
+            child: Row(
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.all(
+                    EspacamentosDoAplicativo.pequeno,
+                  ),
+                  child: ClipRRect(
+                    borderRadius:
+                        BorderRadius.circular(RaiosDoAplicativo.medio),
+                    child: SizedBox(
+                      width: 88,
+                      child: recurso.isEmpty
+                          ? _FundoPadraoDoEncontro(inicioEm: encontro.inicioEm)
+                          : ImagemPrivada(
+                              recurso: recurso,
+                              construaSubstituta: (_) => _FundoPadraoDoEncontro(
+                                inicioEm: encontro.inicioEm,
+                              ),
+                            ),
                     ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(
-                  EspacamentosDoAplicativo.medio,
+                  ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    Text(
-                      encontro.titulo,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleMedium,
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(
+                      EspacamentosDoAplicativo.medio,
                     ),
-                    const SizedBox(height: EspacamentosDoAplicativo.pequeno),
-                    _LinhaDoEncontro(
-                      icone: Icons.calendar_today_outlined,
-                      texto: DateFormat("dd/MM/yyyy '•' HH:mm", 'pt_BR')
-                          .format(encontro.inicioEm),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                encontro.titulo,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            if (encontro.quantidadeDeNovidades > 0) ...<Widget>[
+                              const SizedBox(
+                                width: EspacamentosDoAplicativo.pequeno,
+                              ),
+                              _IndicadorDeNovidades(encontro: encontro),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(
+                            height: EspacamentosDoAplicativo.pequeno),
+                        _LinhaDoEncontro(
+                          icone: Icons.calendar_today_outlined,
+                          texto: DateFormat("dd/MM/yyyy '•' HH:mm", 'pt_BR')
+                              .format(encontro.inicioEm),
+                        ),
+                        if (encontro.local != null &&
+                            encontro.local!.trim().isNotEmpty) ...<Widget>[
+                          const SizedBox(
+                              height: EspacamentosDoAplicativo.minimo),
+                          _LinhaDoEncontro(
+                            icone: Icons.location_on_outlined,
+                            texto: encontro.local!,
+                          ),
+                        ],
+                      ],
                     ),
-                    if (encontro.local != null &&
-                        encontro.local!.trim().isNotEmpty) ...<Widget>[
-                      const SizedBox(height: EspacamentosDoAplicativo.minimo),
-                      _LinhaDoEncontro(
-                        icone: Icons.location_on_outlined,
-                        texto: encontro.local!,
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
-              ),
+                const Padding(
+                  padding:
+                      EdgeInsets.only(right: EspacamentosDoAplicativo.medio),
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    color: CoresDoAplicativo.textoTerciario,
+                  ),
+                ),
+              ],
             ),
-            const Padding(
-              padding: EdgeInsets.only(right: EspacamentosDoAplicativo.medio),
-              child: Icon(
-                Icons.chevron_right_rounded,
-                color: CoresDoAplicativo.textoTerciario,
-              ),
-            ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ListaDeEncontros extends StatelessWidget {
+  const _ListaDeEncontros({
+    required this.encontros,
+    required this.aoAbrir,
+  });
+
+  final List<EncontroResumo> encontros;
+  final Future<void> Function(String identificador) aoAbrir;
+
+  @override
+  Widget build(BuildContext context) {
+    BorderRadius raio = BorderRadius.circular(RaiosDoAplicativo.grande);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: CoresDoAplicativo.fundoDoCartao,
+        borderRadius: raio,
+        border: Border.all(color: CoresDoAplicativo.bordaDiscreta),
+      ),
+      child: ClipRRect(
+        borderRadius: raio,
+        child: Material(
+          color: CoresDoAplicativo.transparente,
+          child: Column(
+            children: <Widget>[
+              for (int indice = 0;
+                  indice < encontros.length;
+                  indice++) ...<Widget>[
+                _EncontroCompacto(
+                  encontro: encontros[indice],
+                  aoAbrir: () => aoAbrir(encontros[indice].identificador),
+                ),
+                if (indice < encontros.length - 1)
+                  const Divider(
+                    height: 1,
+                    indent: 112,
+                    endIndent: EspacamentosDoAplicativo.medio,
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _IndicadorDeNovidades extends StatelessWidget {
+  const _IndicadorDeNovidades({required this.encontro});
+
+  final EncontroResumo encontro;
+
+  @override
+  Widget build(BuildContext context) {
+    int quantidade = encontro.quantidadeDeNovidades;
+
+    return Container(
+      key: Key('novidades-${encontro.identificador}'),
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: CoresDoAplicativo.coral,
+        borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        quantidade > 99 ? '99+' : '$quantidade',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -655,8 +750,8 @@ class _FundoPadraoDoEncontro extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            CoresDoAplicativo.verdeEscuro,
-            CoresDoAplicativo.fundoDoCartaoSuave,
+            Color(0xFF24272C),
+            Color(0xFF343037),
             Color(0xFF6A4615),
           ],
         ),
@@ -740,6 +835,17 @@ String _descrevaPresencas(EncontroResumo encontro) {
   return quantidade == 1
       ? '1 presença confirmada'
       : '$quantidade presenças confirmadas';
+}
+
+String _descrevaEncontroParaAcessibilidade(EncontroResumo encontro) {
+  int quantidade = encontro.quantidadeDeNovidades;
+  String descricaoDeNovidades = quantidade == 1
+      ? ', 1 novidade'
+      : quantidade > 1
+          ? ', $quantidade novidades'
+          : '';
+
+  return 'Abrir encontro ${encontro.titulo}$descricaoDeNovidades';
 }
 
 class _CarregamentoDaPagina extends StatelessWidget {

@@ -1,19 +1,28 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/autenticacao/repositorio_de_autenticacao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/autenticacao/resposta_de_sessao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/erros/excecao_da_api.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/repositorio_de_imagens_privadas.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/instalacao/contrato_do_servico_de_instalacao.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/instalacao/servico_de_instalacao.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/combinados/dados/repositorio_de_combinados.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/combinados/modelos/item_do_encontro.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/convites_por_link/dados/repositorio_de_convites_por_link.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/convites_por_link/modelos/convite_por_link.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/dados/repositorio_de_encontros.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/encontro_criado.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/encontro_detalhado.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/participante_do_encontro.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/preferencias_do_aniversario.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/servicos/seletor_de_imagem.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/inicio/dados/repositorio_da_pagina_inicial.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/inicio/modelos/encontro_resumo.dart';
@@ -216,6 +225,72 @@ void main() {
     expect(find.text('Foto de perfil atualizada.'), findsOneWidget);
   });
 
+  testWidgets('deve orientar a instalacao pelo Safari no iPhone', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    ServicoDeInstalacaoFalso instalacao = ServicoDeInstalacaoFalso(
+      situacao: SituacaoDaInstalacao.requerOrientacaoNoIos,
+    );
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        servicoDeInstalacao: instalacao,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Perfil'));
+    await testador.pumpAndSettle();
+    await testador.scrollUntilVisible(
+      find.byKey(const Key('instalar-aplicativo')),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await testador.tap(find.byKey(const Key('instalar-aplicativo')));
+    await testador.pumpAndSettle();
+
+    expect(find.text('Instalar o Juntô'), findsOneWidget);
+    expect(find.text('Toque em Compartilhar.'), findsOneWidget);
+    expect(
+      find.text('Escolha “Adicionar à Tela de Início”.'),
+      findsOneWidget,
+    );
+    expect(instalacao.quantidadeDeSolicitacoes, 0);
+  });
+
+  testWidgets('deve solicitar e concluir a instalacao nativa', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    ServicoDeInstalacaoFalso instalacao = ServicoDeInstalacaoFalso(
+      situacao: SituacaoDaInstalacao.podeSolicitar,
+      aceite: true,
+    );
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        servicoDeInstalacao: instalacao,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Perfil'));
+    await testador.pumpAndSettle();
+    await testador.scrollUntilVisible(
+      find.byKey(const Key('instalar-aplicativo')),
+      250,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await testador.tap(find.byKey(const Key('instalar-aplicativo')));
+    await testador.pumpAndSettle();
+
+    expect(instalacao.quantidadeDeSolicitacoes, 1);
+    expect(find.byKey(const Key('instalar-aplicativo')), findsNothing);
+  });
+
   testWidgets('deve listar e filtrar a linha do tempo de memorias', (
     WidgetTester testador,
   ) async {
@@ -252,7 +327,7 @@ void main() {
       FiltroDaLinhaDoTempo.comMemorias,
     );
     await testador.scrollUntilVisible(
-      find.byKey(const Key('abrir-galeria-encontro-memoria')),
+      find.byKey(const Key('memoria-encontro-memoria')),
       160,
       scrollable: find.descendant(
         of: find.byKey(const Key('lista-da-linha-do-tempo')),
@@ -264,10 +339,9 @@ void main() {
       const Offset(0, -120),
     );
     await testador.pumpAndSettle();
-    await testador.tap(
-      find.byKey(const Key('abrir-galeria-encontro-memoria')),
-    );
+    await testador.tap(find.byKey(const Key('memoria-encontro-memoria')));
     await testador.pumpAndSettle();
+
     expect(find.text('Mídias do encontro'), findsOneWidget);
   });
 
@@ -331,6 +405,66 @@ void main() {
     expect(find.text('Café de domingo'), findsNothing);
   });
 
+  testWidgets('deve exibir novidades nos encontros da home', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDaPaginaInicialFalso repositorioDaPaginaInicial =
+        RepositorioDaPaginaInicialFalso(
+      encontros: <EncontroResumo>[
+        EncontroResumo(
+          identificador: 'encontro-em-destaque',
+          titulo: 'Café de domingo',
+          inicioEm: DateTime(2026, 7, 19, 16),
+          situacao: 'Planejado',
+          quantidadeDePresencasConfirmadas: 3,
+          quantidadeDeNovidades: 1,
+          usuarioAtualConfirmouPresenca: true,
+        ),
+        EncontroResumo(
+          identificador: 'encontro-compacto',
+          titulo: 'Noite de jogos',
+          inicioEm: DateTime(2026, 7, 20, 19),
+          situacao: 'Planejado',
+          quantidadeDePresencasConfirmadas: 4,
+          quantidadeDeNovidades: 120,
+          usuarioAtualConfirmouPresenca: true,
+        ),
+      ],
+    );
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDaPaginaInicial: repositorioDaPaginaInicial,
+      ),
+    );
+    await testador.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('novidades-encontro-em-destaque')),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('Abrir encontro Café de domingo, 1 novidade'),
+      findsOneWidget,
+    );
+
+    await testador.drag(find.byType(ListView), const Offset(0, -500));
+    await testador.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('novidades-encontro-compacto')),
+      findsOneWidget,
+    );
+    expect(find.text('99+'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Abrir encontro Noite de jogos, 120 novidades'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('deve permitir tentar novamente quando a home falhar', (
     WidgetTester testador,
   ) async {
@@ -370,6 +504,7 @@ void main() {
             inicioEm: DateTime(2026, 7, 20, 19),
             situacao: 'Planejado',
             quantidadeDePresencasConfirmadas: 1,
+            quantidadeDeNovidades: 0,
             usuarioAtualConfirmouPresenca: true,
           ),
         );
@@ -459,6 +594,86 @@ void main() {
     expect(find.text('Olá, Pessoa'), findsOneWidget);
   });
 
+  testWidgets('deve criar aniversario com preferencias opcionais', (
+    WidgetTester testador,
+  ) async {
+    await testador.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => testador.binding.setSurfaceSize(null));
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDeEncontrosFalso repositorioDeEncontros =
+        RepositorioDeEncontrosFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDeEncontros: repositorioDeEncontros,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.byTooltip('Criar encontro'));
+    await testador.pumpAndSettle();
+
+    expect(find.byKey(const Key('preferencias-do-aniversario')), findsNothing);
+
+    await testador.enterText(
+      find.widgetWithText(TextFormField, 'Título do encontro'),
+      'Aniversário da Ana',
+    );
+    await testador.tap(
+      find.byKey(const Key('selecionar-tipo-do-encontro')),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(
+      find.byKey(const Key('tipo-do-encontro-aniversário')),
+    );
+    await testador.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('preferencias-do-aniversario')),
+      findsOneWidget,
+    );
+
+    await testador.enterText(
+      find.byKey(const Key('numero-do-calcado')),
+      '42',
+    );
+    await testador.enterText(
+      find.byKey(const Key('tamanho-da-camiseta')),
+      'M',
+    );
+    await testador.enterText(
+      find.byKey(const Key('sugestoes-de-presente')),
+      'Livros e jogos',
+    );
+    await testador.scrollUntilVisible(
+      find.byKey(const Key('botao-criar-encontro')),
+      350,
+      scrollable: find.byType(Scrollable).first,
+    );
+    Finder botaoDeCriacao = find.byKey(const Key('botao-criar-encontro'));
+    await testador.ensureVisible(botaoDeCriacao);
+    await testador.pumpAndSettle();
+    await testador.tap(botaoDeCriacao);
+    await testador.pumpAndSettle();
+
+    expect(repositorioDeEncontros.ultimoTipo, 'Aniversário');
+    expect(
+      repositorioDeEncontros.ultimasPreferenciasDoAniversario?.numeroDoCalcado,
+      '42',
+    );
+    expect(
+      repositorioDeEncontros
+          .ultimasPreferenciasDoAniversario?.tamanhoDaCamiseta,
+      'M',
+    );
+    expect(
+      repositorioDeEncontros
+          .ultimasPreferenciasDoAniversario?.sugestoesDePresente,
+      'Livros e jogos',
+    );
+  });
+
   testWidgets('deve mostrar erro quando a criacao do encontro falhar', (
     WidgetTester testador,
   ) async {
@@ -542,6 +757,11 @@ void main() {
       const Offset(0, -360),
     );
     await testador.pumpAndSettle();
+    expect(find.text('Quem vai'), findsOneWidget);
+    expect(
+      find.byKey(const Key('avatares-dos-participantes-confirmados')),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('abrir-participantes')), findsOneWidget);
     await testador.tap(find.byKey(const Key('abrir-participantes')));
     await testador.pumpAndSettle();
@@ -549,6 +769,137 @@ void main() {
     expect(find.text('Participantes'), findsWidgets);
     expect(find.text('Pessoa Teste (você)'), findsOneWidget);
     expect(find.text('Bia Souza'), findsOneWidget);
+  });
+
+  testWidgets('deve mostrar preferencias no detalhe do aniversario', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDeEncontrosFalso repositorioDeEncontros =
+        RepositorioDeEncontrosFalso(
+      tipoInicial: 'Aniversário',
+      preferenciasIniciaisDoAniversario: const PreferenciasDoAniversario(
+        numeroDoCalcado: '42',
+        tamanhoDaCamiseta: 'M',
+        sugestoesDePresente: 'Livros e jogos',
+      ),
+    );
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDeEncontros: repositorioDeEncontros,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+    await testador.tap(
+      find.byKey(const Key('abrir-informacoes-do-encontro')),
+    );
+    await testador.pumpAndSettle();
+    await testador.scrollUntilVisible(
+      find.byKey(const Key('resumo-das-preferencias-do-aniversario')),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+
+    expect(
+      find.byKey(const Key('resumo-das-preferencias-do-aniversario')),
+      findsOneWidget,
+    );
+    expect(find.text('Calçado 42 · Camiseta M'), findsOneWidget);
+    expect(find.text('1 informação de presente cadastrada'), findsOneWidget);
+    expect(
+      find.byKey(const Key('detalhes-das-preferencias-do-aniversario')),
+      findsNothing,
+    );
+
+    await testador.tap(
+      find.byKey(const Key('resumo-das-preferencias-do-aniversario')),
+    );
+    await testador.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('detalhes-das-preferencias-do-aniversario')),
+      findsOneWidget,
+    );
+    expect(find.text('Calçado: 42'), findsOneWidget);
+    expect(find.text('Camiseta: M'), findsOneWidget);
+    expect(find.text('Livros e jogos'), findsOneWidget);
+  });
+
+  testWidgets('deve mostrar estado vazio quando ninguem confirmou', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDeEncontrosFalso repositorioDeEncontros =
+        RepositorioDeEncontrosFalso(
+      situacaoInicialDoUsuario: 'Talvez',
+    );
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDeEncontros: repositorioDeEncontros,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+    await _abraInformacoesDoEncontro(testador);
+    await testador.scrollUntilVisible(
+      find.text('Ninguém confirmou ainda.'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+
+    expect(find.text('Ninguém confirmou ainda.'), findsOneWidget);
+  });
+
+  testWidgets('deve resumir participantes excedentes na secao quem vai', (
+    WidgetTester testador,
+  ) async {
+    await testador.binding.setSurfaceSize(const Size(320, 720));
+    addTearDown(() => testador.binding.setSurfaceSize(null));
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    List<ParticipanteDoEncontro> participantesAdicionais =
+        List<ParticipanteDoEncontro>.generate(
+      5,
+      (int indice) => ParticipanteDoEncontro(
+        identificadorDoUsuario: 'confirmado-$indice',
+        nome: 'Pessoa ${indice + 2}',
+        papel: 'Convidado',
+        situacao: 'Confirmado',
+        usuarioAtual: false,
+      ),
+    );
+    RepositorioDeEncontrosFalso repositorioDeEncontros =
+        RepositorioDeEncontrosFalso(
+      participantesAdicionais: participantesAdicionais,
+    );
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDeEncontros: repositorioDeEncontros,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+    await _abraInformacoesDoEncontro(testador);
+    await testador.scrollUntilVisible(
+      find.byKey(const Key('quantidade-restante-de-participantes')),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+
+    expect(find.text('+1'), findsOneWidget);
+    expect(find.textContaining('e mais 3 pessoas'), findsOneWidget);
   });
 
   testWidgets('deve filtrar participantes por situacao', (
@@ -597,6 +948,200 @@ void main() {
     expect(find.text('Bia Souza'), findsOneWidget);
   });
 
+  testWidgets('criador deve promover participante a administrador', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDeEncontrosFalso repositorioDeEncontros =
+        RepositorioDeEncontrosFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDeEncontros: repositorioDeEncontros,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+    await _abraInformacoesDoEncontro(testador);
+    await testador.scrollUntilVisible(
+      find.byKey(const Key('abrir-participantes')),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await testador.tap(find.byKey(const Key('abrir-participantes')));
+    await testador.pumpAndSettle();
+
+    await testador.tap(
+      find.byKey(const Key('gerenciar-papel-usuario-2')),
+    );
+    await testador.pumpAndSettle();
+    expect(find.text('Tornar administrador?'), findsOneWidget);
+    await testador.tap(
+      find.byKey(const Key('confirmar-alteracao-de-papel')),
+    );
+    await testador.pumpAndSettle();
+
+    expect(repositorioDeEncontros.papelDaBia, 'Administrador');
+    expect(find.text('Administrador'), findsOneWidget);
+    expect(find.text('Administrador adicionado.'), findsOneWidget);
+  });
+
+  testWidgets('deve ampliar a foto de um participante', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+
+    await testador.pumpWidget(_crieAplicativo(repositorio));
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+    await _abraInformacoesDoEncontro(testador);
+    await testador.scrollUntilVisible(
+      find.byKey(const Key('abrir-participantes')),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await testador.tap(find.byKey(const Key('abrir-participantes')));
+    await testador.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('abrir-foto-do-participante-usuario-1')),
+      findsNothing,
+    );
+    await testador.tap(
+      find.byKey(const Key('abrir-foto-do-participante-usuario-2')),
+    );
+    await testador.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('foto-ampliada-do-participante-usuario-2')),
+      findsOneWidget,
+    );
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+    await testador.tap(find.byTooltip('Fechar'));
+    await testador.pumpAndSettle();
+    expect(
+      find.byKey(const Key('foto-ampliada-do-participante-usuario-2')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('deve abrir perfil do feed e convidar para outro encontro', (
+    WidgetTester testador,
+  ) async {
+    await testador.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => testador.binding.setSurfaceSize(null));
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDeEncontrosFalso encontros = RepositorioDeEncontrosFalso();
+    RepositorioDaPaginaInicialFalso paginaInicial =
+        RepositorioDaPaginaInicialFalso(
+      encontros: <EncontroResumo>[
+        EncontroResumo(
+          identificador: 'encontro-1',
+          titulo: 'Café de domingo',
+          inicioEm: DateTime(2026, 8, 1, 16),
+          situacao: 'Planejado',
+          quantidadeDePresencasConfirmadas: 3,
+          quantidadeDeNovidades: 0,
+          usuarioAtualConfirmouPresenca: true,
+        ),
+        EncontroResumo(
+          identificador: 'encontro-2',
+          titulo: 'Jantar de sábado',
+          inicioEm: DateTime(2026, 8, 8, 20),
+          situacao: 'Planejado',
+          quantidadeDePresencasConfirmadas: 1,
+          quantidadeDeNovidades: 0,
+          usuarioAtualConfirmouPresenca: true,
+        ),
+      ],
+    );
+    RepositorioDePessoasFrequentesFalso pessoas =
+        RepositorioDePessoasFrequentesFalso(
+      pessoas: <PessoaFrequente>[
+        PessoaFrequente(
+          identificadorDoUsuario: 'usuario-2',
+          nome: 'Bia Souza',
+          quantidadeDeEncontrosEmComum: 3,
+          ultimoEncontroEm: DateTime(2026, 7, 20),
+          urlDaFotoDePerfil: '/arquivos/usuarios/bia.png',
+        ),
+      ],
+    );
+    RepositorioDePublicacoesDoEncontroFalso publicacoes =
+        RepositorioDePublicacoesDoEncontroFalso(
+      publicacoesPersonalizadas: <PublicacaoDoEncontro>[
+        PublicacaoDoEncontro(
+          identificador: 'publicacao-bia',
+          identificadorDoEncontro: 'encontro-1',
+          identificadorDoUsuarioAutor: 'usuario-2',
+          nomeDoAutor: 'Bia Souza',
+          urlDaFotoDePerfilDoAutor: '/arquivos/usuarios/bia.png',
+          texto: 'Chego com o café.',
+          publicadoEm: DateTime(2026, 7, 18, 9),
+          ehAtualizacaoDoSistema: false,
+          usuarioAtual: false,
+        ),
+      ],
+    );
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDaPaginaInicial: paginaInicial,
+        repositorioDeEncontros: encontros,
+        repositorioDePublicacoes: publicacoes,
+        repositorioDePessoasFrequentes: pessoas,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+
+    await testador.tap(
+      find.byKey(const Key('abrir-perfil-usuario-2')),
+    );
+    await testador.pumpAndSettle();
+
+    expect(find.text('Bia Souza'), findsWidgets);
+    expect(find.text('3 encontros juntos'), findsOneWidget);
+    expect(find.text('Último encontro em 20/07/2026'), findsOneWidget);
+
+    await testador.tap(
+      find.byKey(const Key('ampliar-foto-do-perfil-usuario-2')),
+    );
+    await testador.pumpAndSettle();
+    expect(
+      find.byKey(const Key('foto-ampliada-do-perfil-usuario-2')),
+      findsOneWidget,
+    );
+    await testador.tap(find.byTooltip('Fechar'));
+    await testador.pumpAndSettle();
+
+    await testador.tap(
+      find.byKey(const Key('convidar-para-outro-encontro')),
+    );
+    await testador.pumpAndSettle();
+    expect(find.text('Jantar de sábado'), findsOneWidget);
+    expect(
+      find.byKey(const Key('convidar-para-encontro-encontro-1')),
+      findsNothing,
+    );
+
+    await testador.tap(
+      find.byKey(const Key('convidar-para-encontro-encontro-2')),
+    );
+    await testador.pumpAndSettle();
+
+    expect(encontros.ultimoIdentificadorDoUsuarioConvidado, 'usuario-2');
+    expect(find.textContaining('foi convidado(a)'), findsOneWidget);
+  });
+
   testWidgets('deve apresentar estado vazio dos momentos', (
     WidgetTester testador,
   ) async {
@@ -622,6 +1167,10 @@ void main() {
 
     expect(find.text('Ainda não há momentos por aqui.'), findsOneWidget);
     expect(find.byKey(const Key('texto-da-nova-publicacao')), findsOneWidget);
+    expect(
+      repositorioDePublicacoes.ultimoIdentificadorDaPublicacaoVisualizada,
+      isNull,
+    );
   });
 
   testWidgets('deve permitir tentar novamente quando os momentos falharem', (
@@ -645,6 +1194,10 @@ void main() {
     expect(find.text('Falha simulada ao listar momentos.'), findsOneWidget);
     expect(find.text('Tentar novamente'), findsOneWidget);
     expect(find.text('Chego com o café.'), findsNothing);
+    expect(
+      repositorioDePublicacoes.ultimoIdentificadorDaPublicacaoVisualizada,
+      isNull,
+    );
   });
 
   testWidgets('deve publicar no fim da ordem cronologica', (
@@ -669,6 +1222,14 @@ void main() {
       testador.getTopLeft(find.text('Chego com o café.')).dy,
       lessThan(testador.getTopLeft(find.text('Até domingo!')).dy),
     );
+    expect(
+      repositorioDePublicacoes.ultimoIdentificadorDoEncontroVisualizado,
+      'encontro-1',
+    );
+    expect(
+      repositorioDePublicacoes.ultimoIdentificadorDaPublicacaoVisualizada,
+      'publicacao-2',
+    );
 
     await testador.enterText(
       find.byKey(const Key('texto-da-nova-publicacao')),
@@ -683,6 +1244,166 @@ void main() {
       find.byKey(const Key('texto-da-nova-publicacao')),
     );
     expect(campo.controller?.text, isEmpty);
+  });
+
+  testWidgets('deve responder uma publicacao especifica', (
+    WidgetTester testador,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDePublicacoesDoEncontroFalso repositorioDePublicacoes =
+        RepositorioDePublicacoesDoEncontroFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDePublicacoes: repositorioDePublicacoes,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+
+    await testador.tap(
+      find.byKey(const Key('responder-publicacao-publicacao-1')),
+    );
+    await testador.pumpAndSettle();
+
+    expect(find.text('Bia Souza'), findsAtLeastNWidgets(2));
+    expect(find.text('Chego com o café.'), findsAtLeastNWidgets(2));
+    expect(find.byKey(const Key('cancelar-resposta')), findsOneWidget);
+
+    await testador.enterText(
+      find.byKey(const Key('texto-da-nova-publicacao')),
+      'Pode deixar!',
+    );
+    await testador.tap(find.byKey(const Key('publicar-momento')));
+    await testador.pumpAndSettle();
+
+    expect(
+      repositorioDePublicacoes.ultimoIdentificadorDaPublicacaoRespondida,
+      'publicacao-1',
+    );
+    expect(find.text('Pode deixar!'), findsOneWidget);
+    expect(find.byKey(const Key('cancelar-resposta')), findsNothing);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('deve responder por gesto horizontal somente apos o limite', (
+    WidgetTester testador,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    await testador.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => testador.binding.setSurfaceSize(null));
+
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDePublicacoesDoEncontroFalso repositorioDePublicacoes =
+        RepositorioDePublicacoesDoEncontroFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDePublicacoes: repositorioDePublicacoes,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+
+    Finder balao = find.byKey(
+      const Key('deslizar-para-responder-publicacao-1'),
+    );
+    expect(balao, findsOneWidget);
+    expect(
+      find.byKey(const Key('responder-publicacao-publicacao-1')),
+      findsNothing,
+    );
+
+    await testador.drag(balao, const Offset(32, 0));
+    await testador.pumpAndSettle();
+    expect(find.byKey(const Key('cancelar-resposta')), findsNothing);
+
+    await testador.drag(balao, const Offset(0, -120));
+    await testador.pumpAndSettle();
+    expect(find.byKey(const Key('cancelar-resposta')), findsNothing);
+
+    await testador.drag(balao, const Offset(64, 0));
+    await testador.pumpAndSettle();
+    expect(find.byKey(const Key('cancelar-resposta')), findsOneWidget);
+    expect(find.text('Chego com o café.'), findsAtLeastNWidgets(2));
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('deve publicar uma mensagem ao pressionar Enter', (
+    WidgetTester testador,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDePublicacoesDoEncontroFalso repositorioDePublicacoes =
+        RepositorioDePublicacoesDoEncontroFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDePublicacoes: repositorioDePublicacoes,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+
+    Finder campo = find.byKey(const Key('texto-da-nova-publicacao'));
+    await testador.tap(campo);
+    await testador.enterText(campo, 'Mensagem enviada pelo teclado.');
+    await testador.sendKeyEvent(LogicalKeyboardKey.enter);
+    await testador.pumpAndSettle();
+    debugDefaultTargetPlatformOverride = null;
+
+    expect(
+      repositorioDePublicacoes.ultimoTextoPublicado,
+      'Mensagem enviada pelo teclado.',
+    );
+    TextField campoDeTexto = testador.widget<TextField>(campo);
+    expect(campoDeTexto.controller?.text, isEmpty);
+  });
+
+  testWidgets('deve quebrar a linha ao pressionar Shift e Enter', (
+    WidgetTester testador,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDePublicacoesDoEncontroFalso repositorioDePublicacoes =
+        RepositorioDePublicacoesDoEncontroFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDePublicacoes: repositorioDePublicacoes,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+
+    Finder campo = find.byKey(const Key('texto-da-nova-publicacao'));
+    await testador.tap(campo);
+    await testador.enterText(campo, 'Primeira linha');
+    await testador.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await testador.sendKeyEvent(LogicalKeyboardKey.enter);
+    await testador.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    debugDefaultTargetPlatformOverride = null;
+
+    TextField campoDeTexto = testador.widget<TextField>(campo);
+    expect(campoDeTexto.controller?.text, 'Primeira linha\n');
+    expect(repositorioDePublicacoes.ultimoTextoPublicado, isNull);
   });
 
   testWidgets('deve preservar rascunho e operacao quando a publicacao falhar', (
@@ -727,14 +1448,15 @@ void main() {
     expect(find.text('Não quero perder este texto.'), findsOneWidget);
   });
 
-  testWidgets('deve selecionar e publicar foto com legenda no mural', (
+  testWidgets('deve selecionar e publicar midias com legenda no mural', (
     WidgetTester testador,
   ) async {
     RepositorioDeAutenticacaoFalso repositorio =
         RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
     RepositorioDeMemoriasDoEncontroFalso repositorioDeMemorias =
         RepositorioDeMemoriasDoEncontroFalso();
-    SeletorDeImagemFalso seletorDeImagem = SeletorDeImagemFalso();
+    SeletorDeImagemFalso seletorDeImagem =
+        SeletorDeImagemFalso(quantidadeDeMidias: 2);
 
     await testador.pumpWidget(
       _crieAplicativo(
@@ -751,19 +1473,21 @@ void main() {
     await testador.tap(find.byKey(const Key('tirar-foto-pela-camera')));
     await testador.pumpAndSettle();
 
-    expect(find.byKey(const Key('previa-da-foto')), findsOneWidget);
+    expect(find.byKey(const Key('previa-da-midia-0')), findsOneWidget);
+    expect(find.text('1/2'), findsOneWidget);
     expect(seletorDeImagem.ultimaOrigem, EnumeradorDeOrigemDaImagem.camera);
 
     await testador.enterText(
-      find.byKey(const Key('texto-da-nova-publicacao')),
+      find.byKey(const Key('legenda-da-publicacao')),
       'Mesa pronta para a resenha',
     );
-    await testador.tap(find.byKey(const Key('publicar-momento')));
+    await testador.tap(find.byKey(const Key('confirmar-nova-publicacao')));
     await testador.pumpAndSettle();
 
     expect(repositorioDeMemorias.ultimaLegenda, 'Mesa pronta para a resenha');
     expect(repositorioDeMemorias.ultimoNomeDoArquivo, 'capa.png');
-    expect(find.byKey(const Key('previa-da-foto')), findsNothing);
+    expect(repositorioDeMemorias.quantidadeDaUltimaPublicacao, 2);
+    expect(find.byKey(const Key('legenda-da-publicacao')), findsNothing);
     expect(find.byKey(const Key('abrir-midia-memoria-nova')), findsOneWidget);
 
     await testador.tap(find.byKey(const Key('abrir-midia-memoria-nova')));
@@ -784,6 +1508,8 @@ void main() {
   testWidgets('deve abrir a galeria privada pelos detalhes do encontro', (
     WidgetTester testador,
   ) async {
+    await testador.binding.setSurfaceSize(const Size(320, 720));
+    addTearDown(() => testador.binding.setSurfaceSize(null));
     RepositorioDeAutenticacaoFalso repositorio =
         RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
     RepositorioDeMemoriasDoEncontroFalso repositorioDeMemorias =
@@ -817,6 +1543,12 @@ void main() {
 
     expect(find.text('Mídias do encontro'), findsOneWidget);
     expect(find.byKey(const Key('midia-midia-inicial')), findsOneWidget);
+    GridView grade = testador.widget<GridView>(
+      find.byKey(const Key('grade-de-midias')),
+    );
+    SliverGridDelegateWithFixedCrossAxisCount configuracaoDaGrade =
+        grade.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
+    expect(configuracaoDaGrade.crossAxisCount, 3);
 
     await testador.tap(find.byKey(const Key('midia-midia-inicial')));
     await testador.pumpAndSettle();
@@ -874,16 +1606,7 @@ void main() {
     await testador.tap(find.text('Café de domingo'));
     await testador.pumpAndSettle();
     await _abraInformacoesDoEncontro(testador);
-    await testador.scrollUntilVisible(
-      find.byKey(const Key('editar-encontro')),
-      400,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await testador.drag(
-      find.byType(Scrollable).last,
-      const Offset(0, -100),
-    );
-    await testador.pumpAndSettle();
+    await _abraGerenciamentoDoEncontro(testador);
     await testador.tap(find.byKey(const Key('editar-encontro')));
     await testador.pumpAndSettle();
     await testador.enterText(
@@ -941,11 +1664,7 @@ void main() {
     await testador.tap(find.text('Café de domingo'));
     await testador.pumpAndSettle();
     await _abraInformacoesDoEncontro(testador);
-    await testador.scrollUntilVisible(
-      find.byKey(const Key('editar-encontro')),
-      400,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await _abraGerenciamentoDoEncontro(testador);
     await testador.ensureVisible(find.byKey(const Key('editar-encontro')));
     await testador.pumpAndSettle();
     await testador.tap(find.byKey(const Key('editar-encontro')));
@@ -991,16 +1710,7 @@ void main() {
     await testador.tap(find.text('Café de domingo'));
     await testador.pumpAndSettle();
     await _abraInformacoesDoEncontro(testador);
-    await testador.scrollUntilVisible(
-      find.byKey(const Key('cancelar-encontro')),
-      400,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await testador.drag(
-      find.byType(Scrollable).last,
-      const Offset(0, -100),
-    );
-    await testador.pumpAndSettle();
+    await _abraGerenciamentoDoEncontro(testador);
     await testador.tap(find.byKey(const Key('cancelar-encontro')));
     await testador.pumpAndSettle();
 
@@ -1015,7 +1725,7 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.text('Cancelado'), findsOneWidget);
-    expect(find.byKey(const Key('editar-encontro')), findsNothing);
+    expect(find.byKey(const Key('gerenciar-encontro')), findsNothing);
   });
 
   testWidgets('nao deve mostrar gestao para participante comum', (
@@ -1043,8 +1753,7 @@ void main() {
     );
     await testador.pumpAndSettle();
 
-    expect(find.byKey(const Key('editar-encontro')), findsNothing);
-    expect(find.byKey(const Key('cancelar-encontro')), findsNothing);
+    expect(find.byKey(const Key('gerenciar-encontro')), findsNothing);
     expect(find.byKey(const Key('alterar-capa')), findsNothing);
     expect(find.byKey(const Key('remover-capa')), findsNothing);
     expect(find.byKey(const Key('convidar-pessoas')), findsNothing);
@@ -1141,7 +1850,7 @@ void main() {
     expect(find.text('Pessoa convidada'), findsOneWidget);
   });
 
-  testWidgets('deve convidar uma pessoa frequente mediante confirmacao', (
+  testWidgets('deve buscar e convidar uma pessoa conhecida', (
     WidgetTester testador,
   ) async {
     await testador.binding.setSurfaceSize(const Size(390, 844));
@@ -1158,6 +1867,36 @@ void main() {
           nome: 'Caio Lima',
           quantidadeDeEncontrosEmComum: 4,
           ultimoEncontroEm: DateTime(2026, 7, 10),
+        ),
+        PessoaFrequente(
+          identificadorDoUsuario: 'usuario-ana',
+          nome: 'Ana Souza',
+          quantidadeDeEncontrosEmComum: 3,
+          ultimoEncontroEm: DateTime(2026, 7, 9),
+        ),
+        PessoaFrequente(
+          identificadorDoUsuario: 'usuario-bruno',
+          nome: 'Bruno Alves',
+          quantidadeDeEncontrosEmComum: 2,
+          ultimoEncontroEm: DateTime(2026, 7, 8),
+        ),
+        PessoaFrequente(
+          identificadorDoUsuario: 'usuario-davi',
+          nome: 'Davi Rocha',
+          quantidadeDeEncontrosEmComum: 2,
+          ultimoEncontroEm: DateTime(2026, 7, 7),
+        ),
+        PessoaFrequente(
+          identificadorDoUsuario: 'usuario-elisa',
+          nome: 'Elisa Melo',
+          quantidadeDeEncontrosEmComum: 1,
+          ultimoEncontroEm: DateTime(2026, 7, 6),
+        ),
+        PessoaFrequente(
+          identificadorDoUsuario: 'usuario-zuleica',
+          nome: 'Zuleica Dias',
+          quantidadeDeEncontrosEmComum: 1,
+          ultimoEncontroEm: DateTime(2026, 7, 5),
         ),
       ],
     );
@@ -1183,16 +1922,21 @@ void main() {
     await testador.tap(find.byKey(const Key('convidar-pessoas')));
     await testador.pumpAndSettle();
 
-    expect(find.text('Pessoas frequentes'), findsOneWidget);
-    expect(find.text('Caio Lima'), findsOneWidget);
-    expect(find.text('4 encontros juntos'), findsOneWidget);
+    expect(find.text('Pessoas conhecidas'), findsOneWidget);
+    await testador.enterText(
+      find.byKey(const Key('buscar-pessoa-conhecida')),
+      'Zuleica',
+    );
+    await testador.pumpAndSettle();
+    expect(find.text('Zuleica Dias'), findsOneWidget);
+    expect(find.text('Caio Lima'), findsNothing);
     expect(
       repositorioDeEncontros.ultimoIdentificadorDoUsuarioConvidado,
       isNull,
     );
 
     await testador.tap(
-      find.byKey(const Key('convidar-pessoa-frequente-usuario-caio')),
+      find.byKey(const Key('convidar-pessoa-frequente-usuario-zuleica')),
     );
     await testador.pumpAndSettle();
     expect(find.text('Enviar convite?'), findsOneWidget);
@@ -1208,9 +1952,73 @@ void main() {
 
     expect(
       repositorioDeEncontros.ultimoIdentificadorDoUsuarioConvidado,
-      'usuario-caio',
+      'usuario-zuleica',
     );
     expect(find.byKey(const Key('email-do-convidado')), findsNothing);
+  });
+
+  testWidgets('deve criar e copiar convite por link', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDeConvitesPorLinkFalso convitesPorLink =
+        RepositorioDeConvitesPorLinkFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDeConvitesPorLink: convitesPorLink,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+    await _abraInformacoesDoEncontro(testador);
+    await testador.scrollUntilVisible(
+      find.byKey(const Key('abrir-participantes')),
+      400,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await testador.tap(find.byKey(const Key('abrir-participantes')));
+    await testador.pumpAndSettle();
+    await testador.tap(find.byKey(const Key('convidar-pessoas')));
+    await testador.pumpAndSettle();
+    await testador.tap(find.byKey(const Key('criar-link-de-convite')));
+    await testador.pump(const Duration(seconds: 1));
+
+    expect(convitesPorLink.identificadorUsadoParaCriar, isNotNull);
+    expect(find.byKey(const Key('copiar-link-de-convite')), findsOneWidget);
+    expect(find.byKey(const Key('revogar-link-de-convite')), findsOneWidget);
+  });
+
+  testWidgets('deve consultar e aceitar convite por link', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDeConvitesPorLinkFalso convitesPorLink =
+        RepositorioDeConvitesPorLinkFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDeConvitesPorLink: convitesPorLink,
+      ),
+    );
+    await testador.pumpAndSettle();
+    BuildContext contexto = testador.element(find.text('Próximo encontro'));
+    GoRouter.of(contexto).go('/convite/token-compartilhado');
+    await testador.pumpAndSettle();
+
+    expect(convitesPorLink.ultimoTokenConsultado, 'token-compartilhado');
+    expect(find.text('Churrasco de sábado'), findsOneWidget);
+
+    await testador.tap(find.byKey(const Key('aceitar-convite-por-link')));
+    await testador.pumpAndSettle();
+
+    expect(convitesPorLink.ultimoTokenAceito, 'token-compartilhado');
+    expect(find.text('Café de domingo'), findsOneWidget);
   });
 
   testWidgets('deve preservar o email quando o convite falhar', (
@@ -1343,6 +2151,8 @@ void main() {
     );
     RepositorioDaPaginaInicialFalso paginaInicial =
         RepositorioDaPaginaInicialFalso();
+    RepositorioDePublicacoesDoEncontroFalso publicacoes =
+        RepositorioDePublicacoesDoEncontroFalso();
 
     await testador.pumpWidget(
       _crieAplicativo(
@@ -1350,6 +2160,7 @@ void main() {
         repositorioDaPaginaInicial: paginaInicial,
         repositorioDeEncontros: encontros,
         repositorioDeNotificacoes: notificacoes,
+        repositorioDePublicacoes: publicacoes,
       ),
     );
     await testador.pumpAndSettle();
@@ -1368,6 +2179,7 @@ void main() {
 
     expect(encontros.ultimaSituacaoDePresenca, 'Talvez');
     expect(paginaInicial.quantidadeDeListagens, greaterThanOrEqualTo(2));
+    expect(publicacoes.quantidadeDeListagens, greaterThanOrEqualTo(2));
     expect(find.text('Você vai participar?'), findsNothing);
     expect(find.text('Café de domingo'), findsWidgets);
   });
@@ -1479,6 +2291,19 @@ Future<void> _abraInformacoesDoEncontro(WidgetTester testador) async {
   await testador.pumpAndSettle();
 }
 
+Future<void> _abraGerenciamentoDoEncontro(WidgetTester testador) async {
+  Finder entradaDeGerenciamento = find.byKey(const Key('gerenciar-encontro'));
+  await testador.scrollUntilVisible(
+    entradaDeGerenciamento,
+    400,
+    scrollable: find.byType(Scrollable).last,
+  );
+  await testador.ensureVisible(entradaDeGerenciamento);
+  await testador.pumpAndSettle();
+  await testador.tap(entradaDeGerenciamento);
+  await testador.pumpAndSettle();
+}
+
 ProviderScope _crieAplicativo(
   IRepositorioDeAutenticacao repositorio, {
   IRepositorioDaPaginaInicial? repositorioDaPaginaInicial,
@@ -1489,9 +2314,11 @@ ProviderScope _crieAplicativo(
   IRepositorioDeNotificacoes? repositorioDeNotificacoes,
   IRepositorioDeCombinados? repositorioDeCombinados,
   IRepositorioDePessoasFrequentes? repositorioDePessoasFrequentes,
+  IRepositorioDeConvitesPorLink? repositorioDeConvitesPorLink,
   IRepositorioDoPerfil? repositorioDoPerfil,
   ISeletorDeImagem? seletorDeImagem,
   IRepositorioDeImagensPrivadas? repositorioDeImagens,
+  IServicoDeInstalacao? servicoDeInstalacao,
 }) {
   return ProviderScope(
     overrides: [
@@ -1521,6 +2348,10 @@ ProviderScope _crieAplicativo(
       provedorDoRepositorioDePessoasFrequentes.overrideWithValue(
         repositorioDePessoasFrequentes ?? RepositorioDePessoasFrequentesFalso(),
       ),
+      if (repositorioDeConvitesPorLink != null)
+        provedorDoRepositorioDeConvitesPorLink.overrideWithValue(
+          repositorioDeConvitesPorLink,
+        ),
       provedorDoRepositorioDoPerfil.overrideWithValue(
         repositorioDoPerfil ?? RepositorioDoPerfilFalso(),
       ),
@@ -1530,6 +2361,8 @@ ProviderScope _crieAplicativo(
       provedorDoRepositorioDeImagensPrivadas.overrideWithValue(
         repositorioDeImagens ?? RepositorioDeImagensPrivadasFalso(),
       ),
+      if (servicoDeInstalacao != null)
+        provedorDoServicoDeInstalacao.overrideWithValue(servicoDeInstalacao),
     ],
     child: const Aplicativo(),
   );
@@ -1543,6 +2376,28 @@ class RepositorioDeImagensPrivadasFalso
   Future<Uint8List?> obtenhaAsync(String recurso) async {
     quantidadeDeBuscas++;
     return null;
+  }
+}
+
+class ServicoDeInstalacaoFalso implements IServicoDeInstalacao {
+  ServicoDeInstalacaoFalso({
+    required this.situacao,
+    this.aceite = false,
+  });
+
+  final SituacaoDaInstalacao situacao;
+  final bool aceite;
+  int quantidadeDeSolicitacoes = 0;
+
+  @override
+  SituacaoDaInstalacao obtenhaSituacao() {
+    return situacao;
+  }
+
+  @override
+  Future<bool> soliciteInstalacaoAsync() async {
+    quantidadeDeSolicitacoes++;
+    return aceite;
   }
 }
 
@@ -1710,6 +2565,7 @@ class RepositorioDeMemoriasDoEncontroFalso
   String? ultimaLegenda;
   String? ultimoNomeDoArquivo;
   String? ultimaMemoriaRemovida;
+  int quantidadeDaUltimaPublicacao = 0;
 
   @override
   Future<void> removaAsync({
@@ -1738,21 +2594,21 @@ class RepositorioDeMemoriasDoEncontroFalso
   }
 
   @override
-  Future<MemoriaDoEncontro> publiqueImagemAsync({
+  Future<MemoriaDoEncontro> publiqueMidiasAsync({
     required String identificadorDoEncontro,
-    required String nomeDoArquivo,
-    required String tipoDeConteudo,
-    required Uint8List conteudo,
+    required List<MidiaSelecionada> midias,
     String? legenda,
   }) async {
     ultimaLegenda = legenda;
-    ultimoNomeDoArquivo = nomeDoArquivo;
+    ultimoNomeDoArquivo = midias.first.nome;
+    quantidadeDaUltimaPublicacao = midias.length;
 
     return _crieMemoria(
       identificadorDoEncontro: identificadorDoEncontro,
       identificador: 'memoria-nova',
       identificadorDaMidia: 'midia-nova',
       legenda: legenda,
+      quantidadeDeMidias: midias.length,
     );
   }
 
@@ -1761,6 +2617,7 @@ class RepositorioDeMemoriasDoEncontroFalso
     required String identificador,
     required String identificadorDaMidia,
     String? legenda,
+    int quantidadeDeMidias = 1,
   }) {
     return MemoriaDoEncontro(
       identificador: identificador,
@@ -1770,15 +2627,18 @@ class RepositorioDeMemoriasDoEncontroFalso
       legenda: legenda,
       criadoEm: DateTime(2026, 7, 18, 12),
       usuarioAtual: true,
-      midias: <MidiaDaMemoria>[
-        MidiaDaMemoria(
-          identificador: identificadorDaMidia,
+      midias: List<MidiaDaMemoria>.generate(
+        quantidadeDeMidias,
+        (int indice) => MidiaDaMemoria(
+          identificador: indice == 0
+              ? identificadorDaMidia
+              : '$identificadorDaMidia-$indice',
           url:
-              '/api/encontros/$identificadorDoEncontro/memorias/$identificador/midias/$identificadorDaMidia/conteudo',
+              '/api/encontros/$identificadorDoEncontro/memorias/$identificador/midias/$identificadorDaMidia-$indice/conteudo',
           tipoDeConteudo: 'image/png',
           tamanhoEmBytes: 3,
         ),
-      ],
+      ),
     );
   }
 }
@@ -1795,12 +2655,18 @@ class RepositorioDePublicacoesDoEncontroFalso
   final bool deveFalharAoListar;
   final List<PublicacaoDoEncontro>? publicacoesPersonalizadas;
   String? ultimoTextoPublicado;
+  String? ultimoIdentificadorDaPublicacaoRespondida;
   final List<String> identificadoresDasOperacoes = <String>[];
+  int quantidadeDeListagens = 0;
+  String? ultimoIdentificadorDoEncontroVisualizado;
+  String? ultimoIdentificadorDaPublicacaoVisualizada;
 
   @override
   Future<List<PublicacaoDoEncontro>> listeAsync(
     String identificadorDoEncontro,
   ) async {
+    quantidadeDeListagens++;
+
     if (deveFalharAoListar) {
       throw const ExcecaoDaApi(
         codigoHttp: 500,
@@ -1847,12 +2713,25 @@ class RepositorioDePublicacoesDoEncontroFalso
   }
 
   @override
+  Future<void> marqueVisualizacaoAsync({
+    required String identificadorDoEncontro,
+    required String identificadorDaUltimaPublicacao,
+  }) async {
+    ultimoIdentificadorDoEncontroVisualizado = identificadorDoEncontro;
+    ultimoIdentificadorDaPublicacaoVisualizada =
+        identificadorDaUltimaPublicacao;
+  }
+
+  @override
   Future<PublicacaoDoEncontro> publiqueAsync({
     required String identificadorDoEncontro,
     required String texto,
     required String identificadorDaOperacao,
+    String? identificadorDaPublicacaoRespondida,
   }) async {
     ultimoTextoPublicado = texto;
+    ultimoIdentificadorDaPublicacaoRespondida =
+        identificadorDaPublicacaoRespondida;
     identificadoresDasOperacoes.add(identificadorDaOperacao);
 
     if (deveFalharAoPublicar) {
@@ -1871,15 +2750,28 @@ class RepositorioDePublicacoesDoEncontroFalso
       publicadoEm: DateTime(2026, 7, 18, 11),
       ehAtualizacaoDoSistema: false,
       usuarioAtual: true,
+      publicacaoRespondida: identificadorDaPublicacaoRespondida == null
+          ? null
+          : const PublicacaoRespondida(
+              identificador: 'publicacao-1',
+              nomeDoAutor: 'Bia Souza',
+              texto: 'Chego com o café.',
+              temMidia: false,
+              foiRemovida: false,
+            ),
     );
   }
 }
 
 class SeletorDeImagemFalso
-    implements ISeletorDeImagem, ISeletorDeImagemPorOrigem {
-  SeletorDeImagemFalso({this.temImagem = true});
+    implements ISeletorDeImagem, ISeletorDeImagemPorOrigem, ISeletorDeMidias {
+  SeletorDeImagemFalso({
+    this.temImagem = true,
+    this.quantidadeDeMidias = 1,
+  });
 
   final bool temImagem;
+  final int quantidadeDeMidias;
   EnumeradorDeOrigemDaImagem? ultimaOrigem;
 
   @override
@@ -1904,6 +2796,27 @@ class SeletorDeImagemFalso
       ),
     );
   }
+
+  @override
+  Future<List<MidiaSelecionada>> selecioneMidiasPorOrigemAsync(
+    EnumeradorDeOrigemDaImagem origem,
+  ) async {
+    ultimaOrigem = origem;
+    ImagemSelecionada? imagem = await selecioneAsync();
+
+    if (imagem == null) {
+      return <MidiaSelecionada>[];
+    }
+
+    return List<MidiaSelecionada>.generate(
+      quantidadeDeMidias,
+      (int indice) => MidiaSelecionada(
+        nome: indice == 0 ? imagem.nome : 'capa-$indice.png',
+        tipoDeConteudo: imagem.tipoDeConteudo,
+        conteudo: imagem.conteudo,
+      ),
+    );
+  }
 }
 
 class RepositorioDeEncontrosFalso implements IRepositorioDeEncontros {
@@ -1912,6 +2825,8 @@ class RepositorioDeEncontrosFalso implements IRepositorioDeEncontros {
     this.podeGerenciar = true,
     this.deveFalharAoConvidar = false,
     this.tipoInicial,
+    this.preferenciasIniciaisDoAniversario,
+    this.participantesAdicionais = const <ParticipanteDoEncontro>[],
     this.aoCriar,
     this.situacaoInicialDoUsuario = 'Confirmado',
     String? urlInicialDaImagemDeCapa,
@@ -1921,11 +2836,14 @@ class RepositorioDeEncontrosFalso implements IRepositorioDeEncontros {
   final bool podeGerenciar;
   final bool deveFalharAoConvidar;
   final String? tipoInicial;
+  final PreferenciasDoAniversario? preferenciasIniciaisDoAniversario;
+  final List<ParticipanteDoEncontro> participantesAdicionais;
   final void Function(String titulo, String? local)? aoCriar;
   final String situacaoInicialDoUsuario;
   String? ultimoTitulo;
   String? ultimoLocal;
   String? ultimoTipo;
+  PreferenciasDoAniversario? ultimasPreferenciasDoAniversario;
   String? ultimaSituacaoDePresenca;
   String? ultimoTituloEditado;
   String? ultimoTipoEditado;
@@ -1934,6 +2852,7 @@ class RepositorioDeEncontrosFalso implements IRepositorioDeEncontros {
   String? ultimoNomeDaImagem;
   String? ultimoEmailConvidado;
   String? ultimoIdentificadorDoUsuarioConvidado;
+  String papelDaBia = 'Convidado';
   String? urlDaImagemDeCapa;
   bool imagemDeCapaFoiRemovida = false;
 
@@ -1946,6 +2865,7 @@ class RepositorioDeEncontrosFalso implements IRepositorioDeEncontros {
     double? latitude,
     double? longitude,
     String? tipo,
+    PreferenciasDoAniversario? preferenciasDoAniversario,
   }) async {
     if (deveFalhar) {
       throw const ExcecaoDaApi(
@@ -1957,6 +2877,7 @@ class RepositorioDeEncontrosFalso implements IRepositorioDeEncontros {
     ultimoTitulo = titulo;
     ultimoLocal = local;
     ultimoTipo = tipo;
+    ultimasPreferenciasDoAniversario = preferenciasDoAniversario;
     aoCriar?.call(titulo, local);
 
     return EncontroCriado(
@@ -1995,12 +2916,13 @@ class RepositorioDeEncontrosFalso implements IRepositorioDeEncontros {
           situacao: ultimaSituacaoDePresenca ?? situacaoInicialDoUsuario,
           usuarioAtual: true,
         ),
-        const ParticipanteDoEncontro(
+        ParticipanteDoEncontro(
           identificadorDoUsuario: 'usuario-2',
           nome: 'Bia Souza',
-          papel: 'Convidado',
+          papel: papelDaBia,
           situacao: 'Talvez',
           usuarioAtual: false,
+          urlDaFotoDePerfil: '/arquivos/usuarios/bia.png',
         ),
         if (ultimoEmailConvidado != null)
           const ParticipanteDoEncontro(
@@ -2010,7 +2932,9 @@ class RepositorioDeEncontrosFalso implements IRepositorioDeEncontros {
             situacao: 'Convidado',
             usuarioAtual: false,
           ),
+        ...participantesAdicionais,
       ],
+      preferenciasDoAniversario: preferenciasIniciaisDoAniversario,
     );
   }
 
@@ -2042,6 +2966,14 @@ class RepositorioDeEncontrosFalso implements IRepositorioDeEncontros {
   @override
   Future<void> canceleEncontroAsync(String identificador) async {
     encontroFoiCancelado = true;
+  }
+
+  @override
+  Future<void> alterePreferenciasDoAniversarioAsync({
+    required String identificador,
+    required PreferenciasDoAniversario preferencias,
+  }) async {
+    ultimasPreferenciasDoAniversario = preferencias;
   }
 
   @override
@@ -2087,6 +3019,17 @@ class RepositorioDeEncontrosFalso implements IRepositorioDeEncontros {
   }
 
   @override
+  Future<void> alterePapelDoParticipanteAsync({
+    required String identificador,
+    required String identificadorDoUsuario,
+    required String papel,
+  }) async {
+    if (identificadorDoUsuario == 'usuario-2') {
+      papelDaBia = papel;
+    }
+  }
+
+  @override
   Future<void> removaImagemDeCapaAsync(String identificador) async {
     imagemDeCapaFoiRemovida = true;
     urlDaImagemDeCapa = null;
@@ -2107,6 +3050,50 @@ class RepositorioDePessoasFrequentesFalso
   }
 }
 
+class RepositorioDeConvitesPorLinkFalso
+    implements IRepositorioDeConvitesPorLink {
+  String? identificadorUsadoParaCriar;
+  String? identificadorUsadoParaRevogar;
+  String? ultimoTokenConsultado;
+  String? ultimoTokenAceito;
+
+  @override
+  Future<ConvitePorLinkCriado> crieAsync(
+    String identificadorDoEncontro,
+  ) async {
+    identificadorUsadoParaCriar = identificadorDoEncontro;
+    return ConvitePorLinkCriado(
+      token: 'token-compartilhado',
+      expiraEm: DateTime(2026, 8, 20, 19),
+    );
+  }
+
+  @override
+  Future<void> revogueAsync(String identificadorDoEncontro) async {
+    identificadorUsadoParaRevogar = identificadorDoEncontro;
+  }
+
+  @override
+  Future<ConvitePorLinkDetalhado> consulteAsync(String token) async {
+    ultimoTokenConsultado = token;
+    return ConvitePorLinkDetalhado(
+      identificadorDoEncontro: 'encontro-por-link',
+      titulo: 'Churrasco de sábado',
+      inicioEm: DateTime(2026, 8, 20, 19),
+      tipo: 'Churrasco',
+    );
+  }
+
+  @override
+  Future<AceiteDoConvitePorLink> aceiteAsync(String token) async {
+    ultimoTokenAceito = token;
+    return const AceiteDoConvitePorLink(
+      identificadorDoEncontro: 'encontro-por-link',
+      situacao: 'Confirmado',
+    );
+  }
+}
+
 class RepositorioDaPaginaInicialFalso implements IRepositorioDaPaginaInicial {
   RepositorioDaPaginaInicialFalso({
     List<EncontroResumo>? encontros,
@@ -2121,6 +3108,7 @@ class RepositorioDaPaginaInicialFalso implements IRepositorioDaPaginaInicial {
                 inicioEm: DateTime(2026, 7, 19, 16),
                 situacao: 'Planejado',
                 quantidadeDePresencasConfirmadas: 3,
+                quantidadeDeNovidades: 0,
                 usuarioAtualConfirmouPresenca: true,
               ),
             ];

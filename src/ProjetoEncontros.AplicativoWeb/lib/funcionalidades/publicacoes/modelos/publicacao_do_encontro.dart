@@ -13,6 +13,7 @@ class PublicacaoDoEncontro {
     this.nomeOriginalDaMidia,
     this.tipoDeConteudoDaMidia,
     this.tamanhoDaMidiaEmBytes,
+    this.publicacaoRespondida,
   });
 
   factory PublicacaoDoEncontro.deJson(Map<String, dynamic> json) {
@@ -28,6 +29,13 @@ class PublicacaoDoEncontro {
       nomeOriginalDaMidia: json['nomeOriginalDaMidia'] as String?,
       tipoDeConteudoDaMidia: json['tipoDeConteudoDaMidia'] as String?,
       tamanhoDaMidiaEmBytes: json['tamanhoDaMidiaEmBytes'] as int?,
+      publicacaoRespondida: json['publicacaoRespondida'] == null
+          ? null
+          : PublicacaoRespondida.deJson(
+              Map<String, dynamic>.from(
+                json['publicacaoRespondida'] as Map<dynamic, dynamic>,
+              ),
+            ),
       publicadoEm: DateTime.parse(json['publicadoEm'] as String).toLocal(),
       ehAtualizacaoDoSistema: json['ehAtualizacaoDoSistema'] as bool,
       usuarioAtual: json['usuarioAtual'] as bool,
@@ -44,6 +52,7 @@ class PublicacaoDoEncontro {
   final String? nomeOriginalDaMidia;
   final String? tipoDeConteudoDaMidia;
   final int? tamanhoDaMidiaEmBytes;
+  final PublicacaoRespondida? publicacaoRespondida;
   final DateTime publicadoEm;
   final bool ehAtualizacaoDoSistema;
   final bool usuarioAtual;
@@ -54,4 +63,30 @@ class PublicacaoDoEncontro {
       temMidia &&
       tipoDeConteudoDaMidia != null &&
       tipoDeConteudoDaMidia!.toLowerCase().startsWith('image/');
+}
+
+class PublicacaoRespondida {
+  const PublicacaoRespondida({
+    required this.identificador,
+    required this.nomeDoAutor,
+    required this.temMidia,
+    required this.foiRemovida,
+    this.texto,
+  });
+
+  factory PublicacaoRespondida.deJson(Map<String, dynamic> json) {
+    return PublicacaoRespondida(
+      identificador: json['identificador'] as String,
+      nomeDoAutor: json['nomeDoAutor'] as String,
+      texto: json['texto'] as String?,
+      temMidia: json['temMidia'] as bool,
+      foiRemovida: json['foiRemovida'] as bool,
+    );
+  }
+
+  final String identificador;
+  final String nomeDoAutor;
+  final String? texto;
+  final bool temMidia;
+  final bool foiRemovida;
 }

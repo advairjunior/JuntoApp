@@ -7,6 +7,7 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/comunicacao/ident
 import 'package:projeto_encontros_aplicativo_web/compartilhado/erros/excecao_da_api.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/encontro_criado.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/encontro_detalhado.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/preferencias_do_aniversario.dart';
 
 abstract interface class IRepositorioDeEncontros {
   Future<EncontroCriado> crieEncontroAsync({
@@ -17,6 +18,7 @@ abstract interface class IRepositorioDeEncontros {
     double? latitude,
     double? longitude,
     String? tipo,
+    PreferenciasDoAniversario? preferenciasDoAniversario,
   });
 
   Future<EncontroDetalhado> obtenhaEncontroAsync(String identificador);
@@ -33,6 +35,11 @@ abstract interface class IRepositorioDeEncontros {
   });
 
   Future<void> canceleEncontroAsync(String identificador);
+
+  Future<void> alterePreferenciasDoAniversarioAsync({
+    required String identificador,
+    required PreferenciasDoAniversario preferencias,
+  });
 
   Future<String?> altereImagemDeCapaAsync({
     required String identificador,
@@ -51,6 +58,12 @@ abstract interface class IRepositorioDeEncontros {
   Future<void> convidePessoaFrequenteAsync({
     required String identificador,
     required String identificadorDoUsuario,
+  });
+
+  Future<void> alterePapelDoParticipanteAsync({
+    required String identificador,
+    required String identificadorDoUsuario,
+    required String papel,
   });
 
   Future<String> respondaPresencaAsync({
@@ -85,6 +98,7 @@ class RepositorioDeEncontros
     double? latitude,
     double? longitude,
     String? tipo,
+    PreferenciasDoAniversario? preferenciasDoAniversario,
   }) async {
     try {
       Response<dynamic> resposta = await _clienteHttp.post<dynamic>(
@@ -100,6 +114,7 @@ class RepositorioDeEncontros
           ),
           'inicioEm': inicioEm.toUtc().toIso8601String(),
           'tipo': tipo,
+          'preferenciasDoAniversario': preferenciasDoAniversario?.paraJson(),
         },
       );
       Map<String, dynamic> dados =
@@ -173,6 +188,25 @@ class RepositorioDeEncontros
       throw _convertaExcecao(
         excecao,
         mensagemPadrao: 'Não foi possível cancelar o encontro.',
+      );
+    }
+  }
+
+  @override
+  Future<void> alterePreferenciasDoAniversarioAsync({
+    required String identificador,
+    required PreferenciasDoAniversario preferencias,
+  }) async {
+    try {
+      await _clienteHttp.put<dynamic>(
+        '/api/encontros/$identificador/preferencias-do-aniversario',
+        data: preferencias.paraJson(),
+      );
+    } on DioException catch (excecao) {
+      throw _convertaExcecao(
+        excecao,
+        mensagemPadrao:
+            'Não foi possível alterar as preferências do aniversário.',
       );
     }
   }
@@ -283,6 +317,26 @@ class RepositorioDeEncontros
       throw _convertaExcecao(
         excecao,
         mensagemPadrao: 'Não foi possível enviar o convite.',
+      );
+    }
+  }
+
+  @override
+  Future<void> alterePapelDoParticipanteAsync({
+    required String identificador,
+    required String identificadorDoUsuario,
+    required String papel,
+  }) async {
+    try {
+      await _clienteHttp.patch<dynamic>(
+        '/api/encontros/$identificador/participantes/'
+        '$identificadorDoUsuario/papel',
+        data: <String, String>{'papel': papel},
+      );
+    } on DioException catch (excecao) {
+      throw _convertaExcecao(
+        excecao,
+        mensagemPadrao: 'Não foi possível alterar a permissão desta pessoa.',
       );
     }
   }

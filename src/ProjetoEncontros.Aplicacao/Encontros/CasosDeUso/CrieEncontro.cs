@@ -33,7 +33,8 @@ public sealed class CrieEncontro(
             relogio.Agora,
             comando.Tipo,
             comando.Latitude,
-            comando.Longitude);
+            comando.Longitude,
+            CriePreferenciasDoAniversario(comando.PreferenciasDoAniversario));
 
         ParticipanteDoEncontro organizador = ParticipanteDoEncontro.CrieOrganizador(
             Guid.NewGuid(),
@@ -55,7 +56,8 @@ public sealed class CrieEncontro(
             encontro.Situacao.ToString(),
             encontro.Tipo,
             encontro.Localizacao?.Latitude,
-            encontro.Localizacao?.Longitude);
+            encontro.Localizacao?.Longitude,
+            CriePreferenciasDoAniversarioResposta(encontro.PreferenciasDoAniversario));
     }
 
     private async Task<Grupo> ObtenhaGrupoDoUsuarioAsync(
@@ -89,5 +91,31 @@ public sealed class CrieEncontro(
         {
             throw new UnauthorizedAccessException("Usuário não autenticado.");
         }
+    }
+
+    private static PreferenciasDoAniversario? CriePreferenciasDoAniversario(
+        PreferenciasDoAniversarioComando? preferencias)
+    {
+        return preferencias is null
+            ? null
+            : PreferenciasDoAniversario.Crie(
+                preferencias.NumeroDoCalcado,
+                preferencias.TamanhoDaCamiseta,
+                preferencias.TamanhoDaCalca,
+                preferencias.SugestoesDePresente,
+                preferencias.CoisasQueGostariaDeGanhar);
+    }
+
+    private static PreferenciasDoAniversarioResposta? CriePreferenciasDoAniversarioResposta(
+        PreferenciasDoAniversario? preferencias)
+    {
+        return preferencias is null
+            ? null
+            : new(
+                preferencias.NumeroDoCalcado,
+                preferencias.TamanhoDaCamiseta,
+                preferencias.TamanhoDaCalca,
+                preferencias.SugestoesDePresente,
+                preferencias.CoisasQueGostariaDeGanhar);
     }
 }

@@ -94,7 +94,7 @@ class _FiltrosDaLinhaDoTempo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 42,
+      height: 44,
       child: ListView.separated(
         key: const Key('filtros-da-linha-do-tempo'),
         scrollDirection: Axis.horizontal,
@@ -104,11 +104,41 @@ class _FiltrosDaLinhaDoTempo extends StatelessWidget {
         itemBuilder: (BuildContext context, int indice) {
           FiltroDaLinhaDoTempo item = FiltroDaLinhaDoTempo.values[indice];
 
-          return ChoiceChip(
-            key: Key('filtro-${item.valor}'),
-            selected: item == filtro,
-            onSelected: (_) => aoSelecionar(item),
-            label: Text(item.rotulo),
+          bool selecionado = item == filtro;
+
+          return Semantics(
+            button: true,
+            selected: selecionado,
+            child: InkWell(
+              key: Key('filtro-${item.valor}'),
+              onTap: () => aoSelecionar(item),
+              borderRadius: BorderRadius.circular(8),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                constraints: const BoxConstraints(minWidth: 68),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: selecionado
+                          ? CoresDoAplicativo.textoPrincipal
+                          : CoresDoAplicativo.transparente,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  item.rotulo,
+                  style: TextStyle(
+                    color: selecionado
+                        ? CoresDoAplicativo.textoPrincipal
+                        : CoresDoAplicativo.textoTerciario,
+                    fontWeight: selecionado ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
           );
         },
       ),
@@ -158,7 +188,11 @@ class _ConteudoDaLinhaDoTempo extends StatelessWidget {
                   const SizedBox(height: EspacamentosDoAplicativo.grande),
                 Text(
                   DateFormat('MMMM \'de\' yyyy', 'pt_BR').format(item.inicio),
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: const TextStyle(
+                    color: CoresDoAplicativo.textoTerciario,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: EspacamentosDoAplicativo.medio),
               ],
@@ -185,7 +219,7 @@ class _CartaoDaLinhaDoTempo extends StatelessWidget {
       key: Key('memoria-${item.identificadorDoEncontro}'),
       preenchimento: EdgeInsets.zero,
       aoTocar: () => context.push<void>(
-        '/encontros/${item.identificadorDoEncontro}',
+        '/encontros/${item.identificadorDoEncontro}/midias',
       ),
       filho: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,6 +306,7 @@ class _CartaoDaLinhaDoTempo extends StatelessWidget {
                   _InformacaoDaMemoria(
                     icone: Icons.location_on_outlined,
                     texto: item.local!,
+                    expanda: true,
                   ),
                 ],
                 if (item
@@ -282,7 +317,7 @@ class _CartaoDaLinhaDoTempo extends StatelessWidget {
                       const Icon(
                         Icons.favorite_border_rounded,
                         size: 17,
-                        color: CoresDoAplicativo.verdeDestaque,
+                        color: CoresDoAplicativo.coral,
                       ),
                       const SizedBox(width: EspacamentosDoAplicativo.minimo),
                       Expanded(
@@ -312,7 +347,7 @@ class _CartaoDaLinhaDoTempo extends StatelessWidget {
                     ),
                     const Spacer(),
                     if (item.quantidadeDeMemorias > 0)
-                      IconButton.filledTonal(
+                      IconButton(
                         key: Key(
                           'abrir-galeria-${item.identificadorDoEncontro}',
                         ),
@@ -357,25 +392,44 @@ class _CartaoDaLinhaDoTempo extends StatelessWidget {
 }
 
 class _InformacaoDaMemoria extends StatelessWidget {
-  const _InformacaoDaMemoria({required this.icone, required this.texto});
+  const _InformacaoDaMemoria({
+    required this.icone,
+    required this.texto,
+    this.expanda = false,
+  });
 
   final IconData icone;
   final String texto;
+  final bool expanda;
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      mainAxisSize: expanda ? MainAxisSize.max : MainAxisSize.min,
       children: <Widget>[
-        Icon(icone, size: 17, color: CoresDoAplicativo.verdeDestaque),
+        Icon(icone, size: 17, color: CoresDoAplicativo.textoSecundario),
         const SizedBox(width: EspacamentosDoAplicativo.minimo),
-        Text(
-          texto,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(color: CoresDoAplicativo.textoSecundario),
-        ),
+        if (expanda)
+          Expanded(child: _TextoDaInformacaoDaMemoria(texto: texto))
+        else
+          _TextoDaInformacaoDaMemoria(texto: texto),
       ],
+    );
+  }
+}
+
+class _TextoDaInformacaoDaMemoria extends StatelessWidget {
+  const _TextoDaInformacaoDaMemoria({required this.texto});
+
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      texto,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: const TextStyle(color: CoresDoAplicativo.textoSecundario),
     );
   }
 }
@@ -391,7 +445,7 @@ class _FundoDaMemoria extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: <Color>[
-            CoresDoAplicativo.verdeEscuro,
+            Color(0xFF26292E),
             CoresDoAplicativo.fundoDoCartaoSuave,
             Color(0xFF5A3B12),
           ],

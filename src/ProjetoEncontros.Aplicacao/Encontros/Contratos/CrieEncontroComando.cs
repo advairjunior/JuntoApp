@@ -9,4 +9,5 @@ public sealed record CrieEncontroComando(
     DateTimeOffset InicioEm,
     string? Tipo = null,
     double? Latitude = null,
-    double? Longitude = null);
+    double? Longitude = null,
+    PreferenciasDoAniversarioComando? PreferenciasDoAniversario = null);

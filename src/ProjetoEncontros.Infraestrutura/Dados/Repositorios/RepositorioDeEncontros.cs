@@ -139,6 +139,25 @@ public sealed class RepositorioDeEncontros(ContextoDeBanco contextoDeBanco) : IR
                 cancellationToken);
     }
 
+    public async Task AvanceVisualizacaoAteAsync(
+        Guid identificadorDoEncontro,
+        Guid identificadorDoUsuario,
+        DateTimeOffset visualizadoAteEm,
+        CancellationToken cancellationToken)
+    {
+        await contextoDeBanco.ParticipantesDoEncontro
+            .Where(participante =>
+                participante.IdentificadorDoEncontro == identificadorDoEncontro &&
+                participante.IdentificadorDoUsuario == identificadorDoUsuario &&
+                participante.Situacao != SituacaoDoParticipanteDoEncontro.Removido &&
+                participante.VisualizadoAteEm < visualizadoAteEm)
+            .ExecuteUpdateAsync(
+                propriedades => propriedades.SetProperty(
+                    participante => participante.VisualizadoAteEm,
+                    visualizadoAteEm.ToUniversalTime()),
+                cancellationToken);
+    }
+
     public async Task<IReadOnlyCollection<ParticipanteDoEncontro>> ListeParticipantesDosEncontrosAsync(
         IReadOnlyCollection<Guid> identificadoresDosEncontros,
         CancellationToken cancellationToken)
@@ -152,6 +171,42 @@ public sealed class RepositorioDeEncontros(ContextoDeBanco contextoDeBanco) : IR
             .AsNoTracking()
             .Where(participante => identificadoresDosEncontros.Contains(participante.IdentificadorDoEncontro))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, int>> ObtenhaQuantidadesDeNovidadesAsync(
+        IReadOnlyCollection<Guid> identificadoresDosEncontros,
+        Guid identificadorDoUsuario,
+        CancellationToken cancellationToken)
+    {
+        if (identificadoresDosEncontros.Count == 0)
+        {
+            Dictionary<Guid, int> quantidadesVazias = new();
+            return quantidadesVazias;
+        }
+
+        List<QuantidadeDeNovidadesAgrupada> quantidades = await (
+            from participante in contextoDeBanco.ParticipantesDoEncontro.AsNoTracking()
+            join publicacao in contextoDeBanco.PublicacoesDoEncontro.AsNoTracking()
+                on participante.IdentificadorDoEncontro equals publicacao.IdentificadorDoEncontro
+            where identificadoresDosEncontros.Contains(participante.IdentificadorDoEncontro) &&
+                  participante.IdentificadorDoUsuario == identificadorDoUsuario &&
+                  participante.Situacao != SituacaoDoParticipanteDoEncontro.Convidado &&
+                  participante.Situacao != SituacaoDoParticipanteDoEncontro.Removido &&
+                  publicacao.RemovidaEm == null &&
+                  publicacao.IdentificadorDoUsuarioAutor != identificadorDoUsuario &&
+                  publicacao.PublicadoEm > participante.VisualizadoAteEm
+            group publicacao by participante.IdentificadorDoEncontro
+            into publicacoesDoEncontro
+            select new QuantidadeDeNovidadesAgrupada
+            {
+                IdentificadorDoEncontro = publicacoesDoEncontro.Key,
+                Quantidade = publicacoesDoEncontro.Count()
+            })
+            .ToListAsync(cancellationToken);
+
+        return quantidades.ToDictionary(
+            quantidade => quantidade.IdentificadorDoEncontro,
+            quantidade => quantidade.Quantidade);
     }
 
     public async Task<IReadOnlyCollection<PresencaNoEncontro>> ListePresencasDoEncontroAsync(
@@ -200,6 +255,21 @@ public sealed class RepositorioDeEncontros(ContextoDeBanco contextoDeBanco) : IR
                 cancellationToken);
     }
 
+    public async Task<IReadOnlyCollection<PublicacaoDoEncontro>> ObtenhaPublicacoesAsync(
+        IReadOnlyCollection<Guid> identificadoresDasPublicacoes,
+        CancellationToken cancellationToken)
+    {
+        if (identificadoresDasPublicacoes.Count == 0)
+        {
+            return [];
+        }
+
+        return await contextoDeBanco.PublicacoesDoEncontro
+            .AsNoTracking()
+            .Where(publicacao => identificadoresDasPublicacoes.Contains(publicacao.Identificador))
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyCollection<PublicacaoDoEncontro>> ListePublicacoesDoEncontroAsync(
         Guid identificadorDoEncontro,
         CancellationToken cancellationToken)
@@ -211,5 +281,12 @@ public sealed class RepositorioDeEncontros(ContextoDeBanco contextoDeBanco) : IR
                 publicacao.RemovidaEm == null)
             .OrderByDescending(publicacao => publicacao.PublicadoEm)
             .ToListAsync(cancellationToken);
+    }
+
+    private sealed class QuantidadeDeNovidadesAgrupada
+    {
+        public Guid IdentificadorDoEncontro { get; init; }
+
+        public int Quantidade { get; init; }
     }
 }

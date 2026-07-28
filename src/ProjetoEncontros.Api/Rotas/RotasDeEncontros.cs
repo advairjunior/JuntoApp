@@ -7,6 +7,7 @@ using ProjetoEncontros.Api.Compartilhado;
 using ProjetoEncontros.Aplicacao.Compartilhado;
 using ProjetoEncontros.Aplicacao.Encontros.CasosDeUso;
 using ProjetoEncontros.Aplicacao.Encontros.Contratos;
+using ProjetoEncontros.Dominio.Encontros;
 
 namespace ProjetoEncontros.Api.Rotas;
 
@@ -57,6 +58,13 @@ public static class RotasDeEncontros
 
         encontros.MapPut("/{identificadorDoEncontro:guid}", EditeEncontroDiretoAsync)
                  .WithName("EditeEncontroDireto")
+                 .Produces(StatusCodes.Status204NoContent)
+                 .Produces(StatusCodes.Status400BadRequest)
+                 .Produces(StatusCodes.Status401Unauthorized)
+                 .Produces(StatusCodes.Status403Forbidden);
+
+        encontros.MapPut("/{identificadorDoEncontro:guid}/preferencias-do-aniversario", AlterePreferenciasDoAniversarioAsync)
+                 .WithName("AlterePreferenciasDoAniversario")
                  .Produces(StatusCodes.Status204NoContent)
                  .Produces(StatusCodes.Status400BadRequest)
                  .Produces(StatusCodes.Status401Unauthorized)
@@ -127,6 +135,14 @@ public static class RotasDeEncontros
                  .Produces(StatusCodes.Status403Forbidden)
                  .Produces(StatusCodes.Status404NotFound);
 
+        encontros.MapPatch("/{identificadorDoEncontro:guid}/participantes/{identificadorDoUsuarioParticipante:guid}/papel", AlterePapelDoParticipanteDoEncontroAsync)
+                 .WithName("AlterePapelDoParticipanteDoEncontro")
+                 .Produces<RespostaDeParticipanteDoEncontro>(StatusCodes.Status200OK)
+                 .Produces(StatusCodes.Status400BadRequest)
+                 .Produces(StatusCodes.Status401Unauthorized)
+                 .Produces(StatusCodes.Status403Forbidden)
+                 .Produces(StatusCodes.Status404NotFound);
+
         encontros.MapGet("/{identificadorDoEncontro:guid}/publicacoes", ListePublicacoesDoEncontroAsync)
                  .WithName("ListePublicacoesDoEncontro")
                  .Produces<IReadOnlyCollection<RespostaDePublicacaoDoEncontro>>(StatusCodes.Status200OK)
@@ -136,6 +152,13 @@ public static class RotasDeEncontros
         encontros.MapPost("/{identificadorDoEncontro:guid}/publicacoes", CriePublicacaoDoEncontroAsync)
                  .WithName("CriePublicacaoDoEncontro")
                  .Produces<RespostaDePublicacaoDoEncontro>(StatusCodes.Status201Created)
+                 .Produces(StatusCodes.Status400BadRequest)
+                 .Produces(StatusCodes.Status401Unauthorized)
+                 .Produces(StatusCodes.Status403Forbidden);
+
+        encontros.MapPost("/{identificadorDoEncontro:guid}/visualizacao", MarqueVisualizacaoDoEncontroAsync)
+                 .WithName("MarqueVisualizacaoDoEncontro")
+                 .Produces(StatusCodes.Status204NoContent)
                  .Produces(StatusCodes.Status400BadRequest)
                  .Produces(StatusCodes.Status401Unauthorized)
                  .Produces(StatusCodes.Status403Forbidden);
@@ -326,7 +349,8 @@ public static class RotasDeEncontros
             requisicao.InicioEm,
             requisicao.Tipo,
             localizacao?.Latitude,
-            localizacao?.Longitude);
+            localizacao?.Longitude,
+            CriePreferenciasDoAniversarioComando(requisicao.PreferenciasDoAniversario));
         EncontroCriadoResposta encontroCriado = await crieEncontroDireto.CrieAsync(comando, cancellationToken);
         RespostaDeEncontroCriado resposta = CrieRespostaCriada(encontroCriado);
 
@@ -437,6 +461,29 @@ public static class RotasDeEncontros
             localizacao?.Longitude);
 
         await editeEncontroDireto.EditeAsync(comando, cancellationToken);
+
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> AlterePreferenciasDoAniversarioAsync(
+        Guid identificadorDoEncontro,
+        RequisicaoDePreferenciasDoAniversario requisicao,
+        ClaimsPrincipal usuarioAutenticado,
+        AlterePreferenciasDoAniversario alterePreferenciasDoAniversario,
+        CancellationToken cancellationToken)
+    {
+        Guid identificadorDoUsuario = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
+        AlterePreferenciasDoAniversarioComando comando = new(
+            identificadorDoUsuario,
+            identificadorDoEncontro,
+            new(
+                requisicao.NumeroDoCalcado,
+                requisicao.TamanhoDaCamiseta,
+                requisicao.TamanhoDaCalca,
+                requisicao.SugestoesDePresente,
+                requisicao.CoisasQueGostariaDeGanhar));
+
+        await alterePreferenciasDoAniversario.AltereAsync(comando, cancellationToken);
 
         return Results.NoContent();
     }
@@ -556,13 +603,14 @@ public static class RotasDeEncontros
     private static async Task<IResult> ConfirmePresencaDiretaAsync(
         Guid identificadorDoEncontro,
         ClaimsPrincipal usuarioAutenticado,
-        ConfirmePresencaNoEncontroDireto confirmePresencaNoEncontroDireto,
+        RespondaPresencaNoEncontroDireto respondaPresencaNoEncontroDireto,
         CancellationToken cancellationToken)
     {
         Guid identificadorDoUsuario = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
-        PresencaDoUsuarioNoEncontroResposta presenca = await confirmePresencaNoEncontroDireto.ConfirmeAsync(
+        PresencaDoUsuarioNoEncontroResposta presenca = await respondaPresencaNoEncontroDireto.RespondaAsync(
             identificadorDoUsuario,
             identificadorDoEncontro,
+            "Confirmado",
             cancellationToken);
 
         return Results.Ok(CrieRespostaDePresencaDoUsuario(presenca));
@@ -653,6 +701,28 @@ public static class RotasDeEncontros
         return Results.NoContent();
     }
 
+    private static async Task<IResult> AlterePapelDoParticipanteDoEncontroAsync(
+        Guid identificadorDoEncontro,
+        Guid identificadorDoUsuarioParticipante,
+        RequisicaoDeAlteracaoDoPapelDoParticipante requisicao,
+        ClaimsPrincipal usuarioAutenticado,
+        AlterePapelDoParticipanteDoEncontro alterePapelDoParticipanteDoEncontro,
+        CancellationToken cancellationToken)
+    {
+        Guid identificadorDoUsuarioQueAltera = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
+        PapelDoParticipanteDoEncontro papel = ObtenhaPapelDoParticipante(requisicao.Papel);
+        AlterePapelDoParticipanteDoEncontroComando comando = new(
+            identificadorDoUsuarioQueAltera,
+            identificadorDoEncontro,
+            identificadorDoUsuarioParticipante,
+            papel);
+        ParticipanteDoEncontroResposta participante = await alterePapelDoParticipanteDoEncontro.AltereAsync(
+            comando,
+            cancellationToken);
+
+        return Results.Ok(CrieRespostaDeParticipante(participante));
+    }
+
     private static async Task<IResult> ListePublicacoesDoEncontroAsync(
         Guid identificadorDoEncontro,
         HttpResponse respostaHttp,
@@ -686,7 +756,8 @@ public static class RotasDeEncontros
             identificadorDoEncontro,
             identificadorDoUsuario,
             requisicao.Texto,
-            IdentificadorDaOperacaoHttp.Obtenha(requisicaoHttp));
+            IdentificadorDaOperacaoHttp.Obtenha(requisicaoHttp),
+            requisicao.IdentificadorDaPublicacaoRespondida);
         PublicacaoDoEncontroResposta publicacao = await criePublicacaoDoEncontro.CrieAsync(
             comando,
             cancellationToken);
@@ -695,6 +766,24 @@ public static class RotasDeEncontros
         return Results.Created(
             $"/api/encontros/{identificadorDoEncontro}/publicacoes/{resposta.Identificador}",
             resposta);
+    }
+
+    private static async Task<IResult> MarqueVisualizacaoDoEncontroAsync(
+        Guid identificadorDoEncontro,
+        RequisicaoDeVisualizacaoDoEncontro requisicao,
+        ClaimsPrincipal usuarioAutenticado,
+        MarqueVisualizacaoDoEncontro marqueVisualizacaoDoEncontro,
+        CancellationToken cancellationToken)
+    {
+        Guid identificadorDoUsuario = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
+        MarqueVisualizacaoDoEncontroComando comando = new(
+            identificadorDoEncontro,
+            identificadorDoUsuario,
+            requisicao.IdentificadorDaUltimaPublicacao);
+
+        await marqueVisualizacaoDoEncontro.MarqueAsync(comando, cancellationToken);
+
+        return Results.NoContent();
     }
 
     private static async Task<IResult> ListeMemoriasDoEncontroAsync(
@@ -719,7 +808,7 @@ public static class RotasDeEncontros
 
     private static async Task<IResult> CrieMemoriaDoEncontroAsync(
         Guid identificadorDoEncontro,
-        IFormFile arquivo,
+        IFormFileCollection arquivos,
         [FromForm] string? legenda,
         HttpRequest requisicao,
         ClaimsPrincipal usuarioAutenticado,
@@ -727,24 +816,41 @@ public static class RotasDeEncontros
         CancellationToken cancellationToken)
     {
         Guid identificadorDoUsuario = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
-        await using Stream conteudo = arquivo.OpenReadStream();
-        CrieMemoriaDoEncontroComando comando = new(
-            identificadorDoUsuario,
-            identificadorDoEncontro,
-            legenda,
-            arquivo.FileName,
-            arquivo.ContentType,
-            arquivo.Length,
-            conteudo,
-            IdentificadorDaOperacaoHttp.Obtenha(requisicao));
-        MemoriaDoEncontroResposta memoria = await crieMemoriaDoEncontro.CrieAsync(
-            comando,
-            cancellationToken);
-        RespostaDeMemoriaDoEncontro resposta = CrieRespostaDeMemoria(memoria);
+        List<Stream> conteudos = arquivos
+            .Select(arquivo => arquivo.OpenReadStream())
+            .ToList();
 
-        return Results.Created(
-            $"/api/encontros/{identificadorDoEncontro}/memorias/{resposta.Identificador}",
-            resposta);
+        try
+        {
+            List<ArquivoDaMemoriaComando> arquivosDoComando = arquivos
+                .Select((arquivo, indice) => new ArquivoDaMemoriaComando(
+                    arquivo.FileName,
+                    arquivo.ContentType,
+                    arquivo.Length,
+                    conteudos[indice]))
+                .ToList();
+            CrieMemoriaDoEncontroComando comando = new(
+                identificadorDoUsuario,
+                identificadorDoEncontro,
+                legenda,
+                arquivosDoComando,
+                IdentificadorDaOperacaoHttp.Obtenha(requisicao));
+            MemoriaDoEncontroResposta memoria = await crieMemoriaDoEncontro.CrieAsync(
+                comando,
+                cancellationToken);
+            RespostaDeMemoriaDoEncontro resposta = CrieRespostaDeMemoria(memoria);
+
+            return Results.Created(
+                $"/api/encontros/{identificadorDoEncontro}/memorias/{resposta.Identificador}",
+                resposta);
+        }
+        finally
+        {
+            foreach (Stream conteudo in conteudos)
+            {
+                await conteudo.DisposeAsync();
+            }
+        }
     }
 
     private static async Task<IResult> RemovaMemoriaDoEncontroAsync(
@@ -983,13 +1089,14 @@ public static class RotasDeEncontros
     private static async Task<IResult> RemovaPresencaDiretaAsync(
         Guid identificadorDoEncontro,
         ClaimsPrincipal usuarioAutenticado,
-        RemovaPresencaNoEncontroDireto removaPresencaNoEncontroDireto,
+        RespondaPresencaNoEncontroDireto respondaPresencaNoEncontroDireto,
         CancellationToken cancellationToken)
     {
         Guid identificadorDoUsuario = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
-        PresencaDoUsuarioNoEncontroResposta presenca = await removaPresencaNoEncontroDireto.RemovaAsync(
+        PresencaDoUsuarioNoEncontroResposta presenca = await respondaPresencaNoEncontroDireto.RespondaAsync(
             identificadorDoUsuario,
             identificadorDoEncontro,
+            "NaoVai",
             cancellationToken);
 
         return Results.Ok(CrieRespostaDePresencaDoUsuario(presenca));
@@ -1014,7 +1121,8 @@ public static class RotasDeEncontros
             requisicao.InicioEm,
             requisicao.Tipo,
             localizacao?.Latitude,
-            localizacao?.Longitude);
+            localizacao?.Longitude,
+            CriePreferenciasDoAniversarioComando(requisicao.PreferenciasDoAniversario));
         EncontroCriadoResposta encontroCriado = await crieEncontro.CrieAsync(comando, cancellationToken);
         RespostaDeEncontroCriado resposta = CrieRespostaCriada(encontroCriado);
 
@@ -1165,7 +1273,8 @@ public static class RotasDeEncontros
             encontro.InicioEm,
             encontro.Situacao,
             encontro.Tipo,
-            CrieRespostaDeLocalizacao(encontro.Local, encontro.Latitude, encontro.Longitude));
+            CrieRespostaDeLocalizacao(encontro.Local, encontro.Latitude, encontro.Longitude),
+            CrieRespostaDePreferenciasDoAniversario(encontro.PreferenciasDoAniversario));
     }
 
     private static RespostaDeEncontroResumo CrieRespostaResumo(EncontroResumoResposta encontro)
@@ -1179,7 +1288,8 @@ public static class RotasDeEncontros
             encontro.Situacao,
             encontro.QuantidadeDePresencasConfirmadas,
             encontro.UsuarioAtualConfirmouPresenca,
-            encontro.Tipo);
+            encontro.Tipo,
+            encontro.QuantidadeDeNovidades);
     }
 
     private static RespostaDeEncontroRealizadoResumo CrieRespostaRealizadaResumo(
@@ -1226,7 +1336,24 @@ public static class RotasDeEncontros
             publicacao.TamanhoDaMidiaEmBytes,
             publicacao.PublicadoEm,
             publicacao.EhAtualizacaoDoSistema,
-            publicacao.UsuarioAtual);
+            publicacao.UsuarioAtual,
+            CrieRespostaDePublicacaoRespondida(publicacao.PublicacaoRespondida));
+    }
+
+    private static RespostaDePublicacaoRespondida? CrieRespostaDePublicacaoRespondida(
+        PublicacaoRespondidaResposta? publicacaoRespondida)
+    {
+        if (publicacaoRespondida is null)
+        {
+            return null;
+        }
+
+        return new(
+            publicacaoRespondida.Identificador,
+            publicacaoRespondida.NomeDoAutor,
+            publicacaoRespondida.Texto,
+            publicacaoRespondida.TemMidia,
+            publicacaoRespondida.FoiRemovida);
     }
 
     private static RespostaDeMemoriaDoEncontro CrieRespostaDeMemoria(
@@ -1304,7 +1431,34 @@ public static class RotasDeEncontros
             participantes,
             presencas,
             encontro.Tipo,
-            CrieRespostaDeLocalizacao(encontro.Local, encontro.Latitude, encontro.Longitude));
+            CrieRespostaDeLocalizacao(encontro.Local, encontro.Latitude, encontro.Longitude),
+            CrieRespostaDePreferenciasDoAniversario(encontro.PreferenciasDoAniversario));
+    }
+
+    private static PreferenciasDoAniversarioComando? CriePreferenciasDoAniversarioComando(
+        RequisicaoDePreferenciasDoAniversario? preferencias)
+    {
+        return preferencias is null
+            ? null
+            : new(
+                preferencias.NumeroDoCalcado,
+                preferencias.TamanhoDaCamiseta,
+                preferencias.TamanhoDaCalca,
+                preferencias.SugestoesDePresente,
+                preferencias.CoisasQueGostariaDeGanhar);
+    }
+
+    private static RespostaDePreferenciasDoAniversario? CrieRespostaDePreferenciasDoAniversario(
+        PreferenciasDoAniversarioResposta? preferencias)
+    {
+        return preferencias is null
+            ? null
+            : new(
+                preferencias.NumeroDoCalcado,
+                preferencias.TamanhoDaCamiseta,
+                preferencias.TamanhoDaCalca,
+                preferencias.SugestoesDePresente,
+                preferencias.CoisasQueGostariaDeGanhar);
     }
 
     private static RespostaDeLocalizacaoDoEncontro? CrieRespostaDeLocalizacao(
@@ -1351,6 +1505,27 @@ public static class RotasDeEncontros
             participante.Papel,
             participante.Situacao,
             participante.UsuarioAtual);
+    }
+
+    private static PapelDoParticipanteDoEncontro ObtenhaPapelDoParticipante(string? papel)
+    {
+        if (string.Equals(
+                papel,
+                PapelDoParticipanteDoEncontro.Convidado.ToString(),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return PapelDoParticipanteDoEncontro.Convidado;
+        }
+
+        if (string.Equals(
+                papel,
+                PapelDoParticipanteDoEncontro.Administrador.ToString(),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return PapelDoParticipanteDoEncontro.Administrador;
+        }
+
+        throw new ExcecaoDeAplicacaoException("O papel deve ser Convidado ou Administrador.");
     }
 
     private static RespostaDePresencaNoEncontro CrieRespostaDePresenca(PresencaNoEncontroResposta presenca)

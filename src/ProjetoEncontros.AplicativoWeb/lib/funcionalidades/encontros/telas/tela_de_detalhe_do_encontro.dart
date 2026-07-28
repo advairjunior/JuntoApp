@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/conteudo_responsivo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/indicador_de_situacao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/configuracao/configuracao_do_ambiente.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/foto_de_perfil.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/imagem_privada.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/repositorio_de_imagens_privadas.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/cores_do_aplicativo.dart';
@@ -334,30 +335,35 @@ class _ConteudoDoDetalhe extends StatelessWidget {
           ],
           const SizedBox(height: EspacamentosDoAplicativo.grande),
           _ResumoDoEncontro(encontro: encontro),
-          const SizedBox(height: EspacamentosDoAplicativo.grande),
+          const SizedBox(height: EspacamentosDoAplicativo.padrao),
           _PresencaDoUsuario(
             encontro: encontro,
             estaAtualizando: estaAtualizandoPresenca,
             aoAlterar: () => _abraOpcoesDePresencaAsync(context),
           ),
-          const SizedBox(height: EspacamentosDoAplicativo.grande),
-          _NavegacaoDoEncontro(
+          const SizedBox(height: EspacamentosDoAplicativo.padrao),
+          _QuemVai(
             participantes: encontro.participantes,
             aoAbrirParticipantes: aoAbrirParticipantes,
+          ),
+          if (encontro.preferenciasDoAniversario?.temAlgumaInformacao ??
+              false) ...<Widget>[
+            const SizedBox(height: EspacamentosDoAplicativo.padrao),
+            _ResumoDasPreferenciasDoAniversario(
+              encontro: encontro,
+              aoTocar: () => _abraDetalhesDoAniversarioAsync(context),
+            ),
+          ],
+          const SizedBox(height: EspacamentosDoAplicativo.padrao),
+          _NavegacaoDoEncontro(
             aoAbrirCombinados: aoAbrirCombinados,
             aoAbrirMidias: aoAbrirMidias,
           ),
           if (encontro.podeEditar || encontro.podeCancelar) ...<Widget>[
-            const SizedBox(height: EspacamentosDoAplicativo.grande),
-            _AcoesDoOrganizador(
-              podeEditar: encontro.podeEditar,
-              podeCancelar: encontro.podeCancelar,
+            const SizedBox(height: EspacamentosDoAplicativo.padrao),
+            _EntradaDeGerenciamento(
               estaExecutando: estaExecutandoAcaoDoOrganizador,
-              podeMarcarComoRealizado: encontro.podeEditar &&
-                  encontro.situacao.toLowerCase() == 'planejado',
-              aoEditar: aoEditar,
-              aoCancelar: () => _confirmeCancelamentoAsync(context),
-              aoMarcarComoRealizado: () => _confirmeRealizacaoAsync(context),
+              aoTocar: () => _abraGerenciamentoAsync(context),
             ),
           ],
           const SizedBox(height: EspacamentosDoAplicativo.grande),
@@ -376,6 +382,78 @@ class _ConteudoDoDetalhe extends StatelessWidget {
 
     if (situacao != null) {
       await aoAlterarPresenca(situacao);
+    }
+  }
+
+  Future<void> _abraDetalhesDoAniversarioAsync(
+    BuildContext context,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: CoresDoAplicativo.fundoDoCartao,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (BuildContext contextoDaFolha) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(
+            EspacamentosDoAplicativo.grande,
+            0,
+            EspacamentosDoAplicativo.grande,
+            EspacamentosDoAplicativo.grande,
+          ),
+          child: _DetalhesDasPreferenciasDoAniversario(
+            encontro: encontro,
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _abraGerenciamentoAsync(BuildContext context) async {
+    if (estaExecutandoAcaoDoOrganizador) {
+      return;
+    }
+
+    String? acao = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: CoresDoAplicativo.fundoDoCartao,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      builder: (BuildContext contextoDaFolha) {
+        return SingleChildScrollView(
+          child: _AcoesDoOrganizador(
+            podeEditar: encontro.podeEditar,
+            podeCancelar: encontro.podeCancelar,
+            estaExecutando: estaExecutandoAcaoDoOrganizador,
+            podeMarcarComoRealizado: encontro.podeEditar &&
+                encontro.situacao.toLowerCase() == 'planejado',
+            aoEditar: () async {
+              Navigator.of(contextoDaFolha).pop('editar');
+            },
+            aoCancelar: () async {
+              Navigator.of(contextoDaFolha).pop('cancelar');
+            },
+            aoMarcarComoRealizado: () async {
+              Navigator.of(contextoDaFolha).pop('realizar');
+            },
+          ),
+        );
+      },
+    );
+
+    if (!context.mounted) {
+      return;
+    }
+
+    switch (acao) {
+      case 'editar':
+        await aoEditar();
+      case 'realizar':
+        await _confirmeRealizacaoAsync(context);
+      case 'cancelar':
+        await _confirmeCancelamentoAsync(context);
     }
   }
 
@@ -495,43 +573,93 @@ class _AcoesDoOrganizador extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        EspacamentosDoAplicativo.grande,
+        0,
+        EspacamentosDoAplicativo.grande,
+        EspacamentosDoAplicativo.grande,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Gerenciar encontro',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: EspacamentosDoAplicativo.minimo),
+          const Text(
+            'Escolha o que deseja fazer como organizador.',
+            style: TextStyle(color: CoresDoAplicativo.textoSecundario),
+          ),
+          const SizedBox(height: EspacamentosDoAplicativo.medio),
+          _SuperficieAgrupada(
+            filho: Column(
+              children: <Widget>[
+                if (podeEditar)
+                  _LinhaDeAcao(
+                    key: const Key('editar-encontro'),
+                    icone: Icons.edit_outlined,
+                    titulo: 'Editar encontro',
+                    subtitulo: 'Alterar informações e detalhes',
+                    aoTocar: estaExecutando ? null : aoEditar,
+                  ),
+                if (podeEditar && podeMarcarComoRealizado)
+                  const _DivisorAgrupado(),
+                if (podeMarcarComoRealizado)
+                  _LinhaDeAcao(
+                    key: const Key('marcar-encontro-como-realizado'),
+                    icone: Icons.task_alt_rounded,
+                    titulo: 'Marcar como realizado',
+                    subtitulo: 'Mover este encontro para suas memórias',
+                    cor: CoresDoAplicativo.verdeDestaque,
+                    estaExecutando: estaExecutando,
+                    aoTocar: estaExecutando ? null : aoMarcarComoRealizado,
+                  ),
+                if ((podeEditar || podeMarcarComoRealizado) && podeCancelar)
+                  const _DivisorAgrupado(),
+                if (podeCancelar)
+                  _LinhaDeAcao(
+                    key: const Key('cancelar-encontro'),
+                    icone: Icons.event_busy_outlined,
+                    titulo: 'Cancelar encontro',
+                    subtitulo: 'Informar aos participantes que não acontecerá',
+                    cor: CoresDoAplicativo.coral,
+                    estaExecutando: estaExecutando,
+                    aoTocar: estaExecutando ? null : aoCancelar,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EntradaDeGerenciamento extends StatelessWidget {
+  const _EntradaDeGerenciamento({
+    required this.estaExecutando,
+    required this.aoTocar,
+  });
+
+  final bool estaExecutando;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) {
     return _SecaoAgrupada(
-      titulo: 'Ações do organizador',
+      titulo: 'Organização',
+      corDoTitulo: CoresDoAplicativo.textoSecundario,
       filho: _SuperficieAgrupada(
-        filho: Column(
-          children: <Widget>[
-            if (podeMarcarComoRealizado)
-              _LinhaDeAcao(
-                key: const Key('marcar-encontro-como-realizado'),
-                icone: Icons.task_alt_rounded,
-                titulo: 'Marcar como realizado',
-                subtitulo: 'Mover este encontro para suas memórias',
-                cor: CoresDoAplicativo.verdeDestaque,
-                estaExecutando: estaExecutando,
-                aoTocar: estaExecutando ? null : aoMarcarComoRealizado,
-              ),
-            if (podeMarcarComoRealizado && (podeEditar || podeCancelar))
-              const _DivisorAgrupado(),
-            if (podeEditar)
-              _LinhaDeAcao(
-                key: const Key('editar-encontro'),
-                icone: Icons.edit_outlined,
-                titulo: 'Editar encontro',
-                subtitulo: 'Alterar informações e detalhes',
-                aoTocar: estaExecutando ? null : aoEditar,
-              ),
-            if (podeEditar && podeCancelar) const _DivisorAgrupado(),
-            if (podeCancelar)
-              _LinhaDeAcao(
-                key: const Key('cancelar-encontro'),
-                icone: Icons.event_busy_outlined,
-                titulo: 'Cancelar encontro',
-                subtitulo: 'Informar aos participantes que não acontecerá',
-                cor: CoresDoAplicativo.coral,
-                estaExecutando: estaExecutando,
-                aoTocar: estaExecutando ? null : aoCancelar,
-              ),
-          ],
+        filho: _LinhaDeAcao(
+          key: const Key('gerenciar-encontro'),
+          icone: Icons.tune_rounded,
+          titulo: 'Gerenciar encontro',
+          subtitulo: 'Editar, concluir ou cancelar este encontro',
+          estaExecutando: estaExecutando,
+          aoTocar: estaExecutando ? null : aoTocar,
         ),
       ),
     );
@@ -559,7 +687,8 @@ class _CabecalhoDoDetalhe extends StatelessWidget {
       encontro.urlDaImagemDeCapa,
     );
 
-    double alturaDoHero = MediaQuery.sizeOf(context).width <= 360 ? 260 : 300;
+    double larguraDaTela = MediaQuery.sizeOf(context).width;
+    double alturaDoHero = (larguraDaTela * 0.76).clamp(236.0, 288.0);
 
     return Material(
       color: Colors.transparent,
@@ -1001,6 +1130,280 @@ class _ResumoDoEncontro extends ConsumerWidget {
   }
 }
 
+class _ResumoDasPreferenciasDoAniversario extends StatelessWidget {
+  const _ResumoDasPreferenciasDoAniversario({
+    required this.encontro,
+    required this.aoTocar,
+  });
+
+  final EncontroDetalhado encontro;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    List<String> medidas = <String>[
+      if (_temTexto(encontro.preferenciasDoAniversario?.numeroDoCalcado))
+        'Calçado ${encontro.preferenciasDoAniversario!.numeroDoCalcado}',
+      if (_temTexto(encontro.preferenciasDoAniversario?.tamanhoDaCamiseta))
+        'Camiseta ${encontro.preferenciasDoAniversario!.tamanhoDaCamiseta}',
+      if (_temTexto(encontro.preferenciasDoAniversario?.tamanhoDaCalca))
+        'Calça ${encontro.preferenciasDoAniversario!.tamanhoDaCalca}',
+    ];
+    int quantidadeDeInformacoesDePresente = <String?>[
+      encontro.preferenciasDoAniversario?.sugestoesDePresente,
+      encontro.preferenciasDoAniversario?.coisasQueGostariaDeGanhar,
+    ].where(_temTexto).length;
+
+    String resumo = medidas.isEmpty
+        ? 'Informações de presente disponíveis'
+        : medidas.join(' · ');
+    String complemento = switch (quantidadeDeInformacoesDePresente) {
+      0 => 'Consulte as preferências cadastradas',
+      1 => '1 informação de presente cadastrada',
+      _ =>
+        '$quantidadeDeInformacoesDePresente informações de presente cadastradas',
+    };
+
+    return _SecaoAgrupada(
+      titulo: 'Ideias para o aniversariante',
+      corDoTitulo: CoresDoAplicativo.ambar,
+      filho: _CartaoDeInformacaoAdicional(
+        key: const Key('resumo-das-preferencias-do-aniversario'),
+        icone: Icons.redeem_outlined,
+        titulo: 'Presentes e tamanhos',
+        resumo: resumo,
+        complemento: complemento,
+        aoTocar: aoTocar,
+      ),
+    );
+  }
+
+  bool _temTexto(String? texto) {
+    return texto != null && texto.trim().isNotEmpty;
+  }
+}
+
+class _CartaoDeInformacaoAdicional extends StatelessWidget {
+  const _CartaoDeInformacaoAdicional({
+    required this.icone,
+    required this.titulo,
+    required this.resumo,
+    required this.complemento,
+    required this.aoTocar,
+    super.key,
+  });
+
+  final IconData icone;
+  final String titulo;
+  final String resumo;
+  final String complemento;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
+        onTap: aoTocar,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: EspacamentosDoAplicativo.padrao,
+            vertical: EspacamentosDoAplicativo.medio,
+          ),
+          child: Row(
+            children: <Widget>[
+              _IconeDeLinha(icone: icone, cor: CoresDoAplicativo.ambar),
+              const SizedBox(width: EspacamentosDoAplicativo.medio),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      titulo,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: EspacamentosDoAplicativo.minimo),
+                    Text(
+                      resumo,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: CoresDoAplicativo.textoSecundario,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: EspacamentosDoAplicativo.minimo),
+                    Text(
+                      complemento,
+                      style: const TextStyle(
+                        color: CoresDoAplicativo.textoTerciario,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: CoresDoAplicativo.textoTerciario,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DetalhesDasPreferenciasDoAniversario extends StatelessWidget {
+  const _DetalhesDasPreferenciasDoAniversario({required this.encontro});
+
+  final EncontroDetalhado encontro;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: const Key('detalhes-das-preferencias-do-aniversario'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'Ideias para o aniversariante',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: EspacamentosDoAplicativo.minimo),
+        const Text(
+          'Informações para ajudar na escolha de um presente.',
+          style: TextStyle(color: CoresDoAplicativo.textoSecundario),
+        ),
+        const SizedBox(height: EspacamentosDoAplicativo.grande),
+        Wrap(
+          spacing: EspacamentosDoAplicativo.pequeno,
+          runSpacing: EspacamentosDoAplicativo.pequeno,
+          children: <Widget>[
+            if (_temTexto(
+              encontro.preferenciasDoAniversario?.numeroDoCalcado,
+            ))
+              _MedidaDoAniversariante(
+                icone: Icons.straighten,
+                rotulo: 'Calçado',
+                valor: encontro.preferenciasDoAniversario!.numeroDoCalcado!,
+              ),
+            if (_temTexto(
+              encontro.preferenciasDoAniversario?.tamanhoDaCamiseta,
+            ))
+              _MedidaDoAniversariante(
+                icone: Icons.checkroom_outlined,
+                rotulo: 'Camiseta',
+                valor: encontro.preferenciasDoAniversario!.tamanhoDaCamiseta!,
+              ),
+            if (_temTexto(
+              encontro.preferenciasDoAniversario?.tamanhoDaCalca,
+            ))
+              _MedidaDoAniversariante(
+                icone: Icons.checkroom_outlined,
+                rotulo: 'Calça',
+                valor: encontro.preferenciasDoAniversario!.tamanhoDaCalca!,
+              ),
+          ],
+        ),
+        if (_temTexto(
+          encontro.preferenciasDoAniversario?.sugestoesDePresente,
+        )) ...<Widget>[
+          const SizedBox(height: EspacamentosDoAplicativo.grande),
+          _TextoDasPreferencias(
+            titulo: 'Sugestões de presente',
+            texto: encontro.preferenciasDoAniversario!.sugestoesDePresente!,
+          ),
+        ],
+        if (_temTexto(
+          encontro.preferenciasDoAniversario?.coisasQueGostariaDeGanhar,
+        )) ...<Widget>[
+          const SizedBox(height: EspacamentosDoAplicativo.grande),
+          _TextoDasPreferencias(
+            titulo: 'Gostaria de ganhar',
+            texto:
+                encontro.preferenciasDoAniversario!.coisasQueGostariaDeGanhar!,
+          ),
+        ],
+      ],
+    );
+  }
+
+  bool _temTexto(String? texto) {
+    return texto != null && texto.trim().isNotEmpty;
+  }
+}
+
+class _MedidaDoAniversariante extends StatelessWidget {
+  const _MedidaDoAniversariante({
+    required this.icone,
+    required this.rotulo,
+    required this.valor,
+  });
+
+  final IconData icone;
+  final String rotulo;
+  final String valor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: EspacamentosDoAplicativo.medio,
+        vertical: EspacamentosDoAplicativo.pequeno,
+      ),
+      decoration: BoxDecoration(
+        color: CoresDoAplicativo.fundoDoCartaoSuave,
+        borderRadius: BorderRadius.circular(RaiosDoAplicativo.medio),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icone, size: 18, color: CoresDoAplicativo.ambar),
+          const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+          Text('$rotulo: $valor'),
+        ],
+      ),
+    );
+  }
+}
+
+class _TextoDasPreferencias extends StatelessWidget {
+  const _TextoDasPreferencias({
+    required this.titulo,
+    required this.texto,
+  });
+
+  final String titulo;
+  final String texto;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          titulo,
+          style: const TextStyle(
+            color: CoresDoAplicativo.ambar,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: EspacamentosDoAplicativo.minimo),
+        Text(
+          texto,
+          style: const TextStyle(
+            color: CoresDoAplicativo.textoSecundario,
+            height: 1.4,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _PresencaDoUsuario extends StatelessWidget {
   const _PresencaDoUsuario({
     required this.encontro,
@@ -1020,6 +1423,7 @@ class _PresencaDoUsuario extends StatelessWidget {
 
     return _SecaoAgrupada(
       titulo: 'Minha presença',
+      corDoTitulo: CoresDoAplicativo.verdeDestaque,
       filho: _SuperficieAgrupada(
         filho: Material(
           color: Colors.transparent,
@@ -1112,16 +1516,191 @@ class _PresencaDoUsuario extends StatelessWidget {
   }
 }
 
-class _NavegacaoDoEncontro extends StatelessWidget {
-  const _NavegacaoDoEncontro({
+class _QuemVai extends StatelessWidget {
+  const _QuemVai({
     required this.participantes,
     required this.aoAbrirParticipantes,
-    required this.aoAbrirCombinados,
-    required this.aoAbrirMidias,
   });
 
   final List<ParticipanteDoEncontro> participantes;
   final VoidCallback aoAbrirParticipantes;
+
+  @override
+  Widget build(BuildContext context) {
+    List<ParticipanteDoEncontro> participantesConfirmados = participantes
+        .where(
+          (ParticipanteDoEncontro participante) =>
+              participante.situacao.toLowerCase() == 'confirmado',
+        )
+        .toList();
+
+    return _SecaoAgrupada(
+      titulo: 'Quem vai',
+      corDoTitulo: CoresDoAplicativo.roxoSuave,
+      filho: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          key: const Key('abrir-participantes'),
+          borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
+          onTap: aoAbrirParticipantes,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: EspacamentosDoAplicativo.padrao,
+              vertical: EspacamentosDoAplicativo.medio,
+            ),
+            child: participantesConfirmados.isEmpty
+                ? const Row(
+                    children: <Widget>[
+                      _IconeDeLinha(
+                        icone: Icons.people_outline_rounded,
+                        cor: CoresDoAplicativo.roxoSuave,
+                      ),
+                      SizedBox(width: EspacamentosDoAplicativo.medio),
+                      Expanded(
+                        child: Text(
+                          'Ninguém confirmou ainda.',
+                          style: TextStyle(
+                            color: CoresDoAplicativo.textoSecundario,
+                          ),
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: CoresDoAplicativo.textoTerciario,
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Row(
+                        children: <Widget>[
+                          _AvataresDosParticipantes(
+                            participantes: participantesConfirmados,
+                          ),
+                          const Spacer(),
+                          const Icon(
+                            Icons.chevron_right_rounded,
+                            color: CoresDoAplicativo.textoTerciario,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(
+                        height: EspacamentosDoAplicativo.pequeno,
+                      ),
+                      Text(
+                        _crieResumoDosNomes(participantesConfirmados),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: CoresDoAplicativo.textoSecundario,
+                          fontSize: 13,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _crieResumoDosNomes(
+    List<ParticipanteDoEncontro> participantesConfirmados,
+  ) {
+    const int quantidadeDeNomesVisiveis = 3;
+    List<String> nomes = participantesConfirmados
+        .take(quantidadeDeNomesVisiveis)
+        .map((ParticipanteDoEncontro participante) => participante.nome)
+        .toList();
+    int quantidadeRestante = participantesConfirmados.length - nomes.length;
+
+    if (quantidadeRestante == 0) {
+      return nomes.join(', ');
+    }
+
+    String complemento = quantidadeRestante == 1
+        ? 'e mais 1 pessoa'
+        : 'e mais $quantidadeRestante pessoas';
+    return '${nomes.join(', ')} $complemento';
+  }
+}
+
+class _AvataresDosParticipantes extends StatelessWidget {
+  const _AvataresDosParticipantes({required this.participantes});
+
+  final List<ParticipanteDoEncontro> participantes;
+
+  @override
+  Widget build(BuildContext context) {
+    const int quantidadeMaximaDeAvatares = 5;
+    const double dimensao = 40;
+    const double deslocamento = 28;
+    List<ParticipanteDoEncontro> participantesVisiveis =
+        participantes.take(quantidadeMaximaDeAvatares).toList();
+    int quantidadeRestante =
+        participantes.length - participantesVisiveis.length;
+    int quantidadeDeElementos =
+        participantesVisiveis.length + (quantidadeRestante > 0 ? 1 : 0);
+    double largura = dimensao + ((quantidadeDeElementos - 1) * deslocamento);
+
+    return SizedBox(
+      key: const Key('avatares-dos-participantes-confirmados'),
+      width: largura,
+      height: dimensao,
+      child: Stack(
+        children: <Widget>[
+          for (int indice = 0; indice < participantesVisiveis.length; indice++)
+            Positioned(
+              left: indice * deslocamento,
+              child: Tooltip(
+                message: participantesVisiveis[indice].nome,
+                child: FotoDePerfil(
+                  url: participantesVisiveis[indice].urlDaFotoDePerfil,
+                  iniciais: participantesVisiveis[indice].iniciais,
+                  dimensao: dimensao,
+                  tamanhoDasIniciais: 13,
+                ),
+              ),
+            ),
+          if (quantidadeRestante > 0)
+            Positioned(
+              left: participantesVisiveis.length * deslocamento,
+              child: Container(
+                key: const Key('quantidade-restante-de-participantes'),
+                width: dimensao,
+                height: dimensao,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: CoresDoAplicativo.fundoElevado,
+                  border: Border.all(
+                    color: CoresDoAplicativo.roxoSuave,
+                  ),
+                ),
+                child: Text(
+                  '+$quantidadeRestante',
+                  style: const TextStyle(
+                    color: CoresDoAplicativo.roxoSuave,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavegacaoDoEncontro extends StatelessWidget {
+  const _NavegacaoDoEncontro({
+    required this.aoAbrirCombinados,
+    required this.aoAbrirMidias,
+  });
+
   final VoidCallback aoAbrirCombinados;
   final VoidCallback aoAbrirMidias;
 
@@ -1129,18 +1708,10 @@ class _NavegacaoDoEncontro extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SecaoAgrupada(
       titulo: 'Explorar encontro',
+      corDoTitulo: CoresDoAplicativo.azulSuave,
       filho: _SuperficieAgrupada(
         filho: Column(
           children: <Widget>[
-            _LinhaNavegavel(
-              key: const Key('abrir-participantes'),
-              icone: Icons.people_outline_rounded,
-              titulo: 'Participantes',
-              subtitulo:
-                  '${participantes.length} ${participantes.length == 1 ? 'pessoa' : 'pessoas'} neste encontro',
-              aoTocar: aoAbrirParticipantes,
-            ),
-            const _DivisorAgrupado(),
             _LinhaNavegavel(
               key: const Key('abrir-combinados'),
               icone: Icons.checklist_rounded,
@@ -1164,10 +1735,15 @@ class _NavegacaoDoEncontro extends StatelessWidget {
 }
 
 class _SecaoAgrupada extends StatelessWidget {
-  const _SecaoAgrupada({required this.titulo, required this.filho});
+  const _SecaoAgrupada({
+    required this.titulo,
+    required this.filho,
+    this.corDoTitulo = CoresDoAplicativo.textoSecundario,
+  });
 
   final String titulo;
   final Widget filho;
+  final Color corDoTitulo;
 
   @override
   Widget build(BuildContext context) {
@@ -1181,8 +1757,8 @@ class _SecaoAgrupada extends StatelessWidget {
           ),
           child: Text(
             titulo,
-            style: const TextStyle(
-              color: CoresDoAplicativo.textoSecundario,
+            style: TextStyle(
+              color: corDoTitulo,
               fontSize: 13,
               fontWeight: FontWeight.w600,
             ),
@@ -1201,17 +1777,7 @@ class _SuperficieAgrupada extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: CoresDoAplicativo.fundoDoCartao,
-        borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
-        border: Border.all(color: CoresDoAplicativo.bordaDiscreta),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(RaiosDoAplicativo.grande),
-        child: filho,
-      ),
-    );
+    return filho;
   }
 }
 
@@ -1370,13 +1936,9 @@ class _IconeDeLinha extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: 36,
       height: 36,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(RaiosDoAplicativo.pequeno),
-        color: cor.withValues(alpha: 0.09),
-      ),
       child: Icon(icone, color: cor, size: 19),
     );
   }
@@ -1425,51 +1987,52 @@ class _LinhaDeInformacao extends StatelessWidget {
                 vertical: EspacamentosDoAplicativo.medio,
               ),
               child: Row(
-            children: <Widget>[
-              _IconeDeLinha(icone: icone),
-              const SizedBox(width: EspacamentosDoAplicativo.medio),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      rotulo,
-                      style: const TextStyle(
-                        color: CoresDoAplicativo.textoTerciario,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: EspacamentosDoAplicativo.minimo),
-                    Text(
-                      valor,
-                      style: const TextStyle(
-                        color: CoresDoAplicativo.textoPrincipal,
-                        fontSize: 15,
-                        height: 1.25,
-                      ),
-                    ),
-                    if (textoDaAcao != null) ...<Widget>[
-                      const SizedBox(height: EspacamentosDoAplicativo.minimo),
-                      Text(
-                        textoDaAcao!,
-                        style: const TextStyle(
-                          color: CoresDoAplicativo.verdeDestaque,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                children: <Widget>[
+                  _IconeDeLinha(icone: icone),
+                  const SizedBox(width: EspacamentosDoAplicativo.medio),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          rotulo,
+                          style: const TextStyle(
+                            color: CoresDoAplicativo.textoTerciario,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              if (aoPressionar != null)
-                const Icon(
-                  Icons.open_in_new_rounded,
-                  color: CoresDoAplicativo.verdeDestaque,
-                  size: 18,
-                ),
-            ],
+                        const SizedBox(height: EspacamentosDoAplicativo.minimo),
+                        Text(
+                          valor,
+                          style: const TextStyle(
+                            color: CoresDoAplicativo.textoPrincipal,
+                            fontSize: 15,
+                            height: 1.25,
+                          ),
+                        ),
+                        if (textoDaAcao != null) ...<Widget>[
+                          const SizedBox(
+                              height: EspacamentosDoAplicativo.minimo),
+                          Text(
+                            textoDaAcao!,
+                            style: const TextStyle(
+                              color: CoresDoAplicativo.verdeDestaque,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (aoPressionar != null)
+                    const Icon(
+                      Icons.open_in_new_rounded,
+                      color: CoresDoAplicativo.verdeDestaque,
+                      size: 18,
+                    ),
+                ],
               ),
             ),
           ),

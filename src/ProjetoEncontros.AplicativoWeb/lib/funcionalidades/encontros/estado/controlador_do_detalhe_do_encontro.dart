@@ -168,6 +168,24 @@ class ControladorDoDetalheDoEncontro
     );
   }
 
+  Future<bool> alterePapelDoParticipanteAsync({
+    required String identificadorDoUsuario,
+    required String papel,
+  }) async {
+    String mensagemDeSucesso = papel.toLowerCase() == 'administrador'
+        ? 'Administrador adicionado.'
+        : 'Administrador removido.';
+
+    return _executeAcaoDoOrganizadorAsync(
+      acao: () => _repositorio.alterePapelDoParticipanteAsync(
+        identificador: _identificador,
+        identificadorDoUsuario: identificadorDoUsuario,
+        papel: papel,
+      ),
+      mensagemDeSucesso: mensagemDeSucesso,
+    );
+  }
+
   Future<bool> removaImagemDeCapaAsync() async {
     return _executeAcaoDoOrganizadorAsync(
       acao: () => _repositorio.removaImagemDeCapaAsync(_identificador),

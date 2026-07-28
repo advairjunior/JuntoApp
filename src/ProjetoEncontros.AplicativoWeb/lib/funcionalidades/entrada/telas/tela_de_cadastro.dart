@@ -9,7 +9,12 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/cores_do_apl
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos_do_aplicativo.dart';
 
 class TelaDeCadastro extends ConsumerStatefulWidget {
-  const TelaDeCadastro({super.key});
+  const TelaDeCadastro({
+    this.retorno,
+    super.key,
+  });
+
+  final String? retorno;
 
   @override
   ConsumerState<TelaDeCadastro> createState() => _EstadoDaTelaDeCadastro();
@@ -41,7 +46,7 @@ class _EstadoDaTelaDeCadastro extends ConsumerState<TelaDeCadastro> {
           tooltip: 'Voltar',
           onPressed: sessao.operacaoEstaEmAndamento
               ? null
-              : () => context.go('/entrada'),
+              : () => context.go(_crieRotaDeEntrada()),
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
         ),
         title: const Text('Criar conta'),
@@ -250,7 +255,21 @@ class _EstadoDaTelaDeCadastro extends ConsumerState<TelaDeCadastro> {
             );
 
     if (cadastroFoiConcluido && mounted) {
-      context.go('/entrada?cadastro=concluido');
+      context.go(_crieRotaDeEntrada(cadastroFoiConcluido: true));
     }
+  }
+
+  String _crieRotaDeEntrada({bool cadastroFoiConcluido = false}) {
+    Map<String, String> parametros = <String, String>{};
+
+    if (cadastroFoiConcluido) {
+      parametros['cadastro'] = 'concluido';
+    }
+
+    if (widget.retorno != null) {
+      parametros['retorno'] = widget.retorno!;
+    }
+
+    return Uri(path: '/entrada', queryParameters: parametros).toString();
   }
 }

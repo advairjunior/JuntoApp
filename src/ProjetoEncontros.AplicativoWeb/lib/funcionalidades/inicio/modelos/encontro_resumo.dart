@@ -5,6 +5,7 @@ class EncontroResumo {
     required this.inicioEm,
     required this.situacao,
     required this.quantidadeDePresencasConfirmadas,
+    required this.quantidadeDeNovidades,
     required this.usuarioAtualConfirmouPresenca,
     this.local,
     this.urlDaImagemDeCapa,
@@ -21,6 +22,7 @@ class EncontroResumo {
       situacao: json['situacao'] as String,
       quantidadeDePresencasConfirmadas:
           json['quantidadeDePresencasConfirmadas'] as int,
+      quantidadeDeNovidades: json['quantidadeDeNovidades'] as int,
       usuarioAtualConfirmouPresenca:
           json['usuarioAtualConfirmouPresenca'] as bool,
       tipo: json['tipo'] as String?,
@@ -34,6 +36,7 @@ class EncontroResumo {
   final DateTime inicioEm;
   final String situacao;
   final int quantidadeDePresencasConfirmadas;
+  final int quantidadeDeNovidades;
   final bool usuarioAtualConfirmouPresenca;
   final String? tipo;
 }

@@ -9,4 +9,5 @@ public sealed record RespostaDeEncontroCriado(
     DateTimeOffset InicioEm,
     string Situacao,
     string? Tipo = null,
-    RespostaDeLocalizacaoDoEncontro? Localizacao = null);
+    RespostaDeLocalizacaoDoEncontro? Localizacao = null,
+    RespostaDePreferenciasDoAniversario? PreferenciasDoAniversario = null);

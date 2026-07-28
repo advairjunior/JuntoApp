@@ -6,4 +6,5 @@ public sealed record RequisicaoDeCriacaoDeEncontro(
     string? Local,
     DateTimeOffset InicioEm,
     string? Tipo = null,
-    RequisicaoDeLocalizacaoDoEncontro? Localizacao = null);
+    RequisicaoDeLocalizacaoDoEncontro? Localizacao = null,
+    RequisicaoDePreferenciasDoAniversario? PreferenciasDoAniversario = null);

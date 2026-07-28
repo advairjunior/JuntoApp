@@ -39,6 +39,10 @@ public sealed class ObtenhaDetalhesDoEncontro(
         bool usuarioAtualConfirmouPresenca = presencas.Any(presenca =>
             presenca.IdentificadorDoMembroDoGrupo == membro.Identificador && presenca.EstaConfirmada);
         bool podeAlterar = participanteAtual.EhOrganizador;
+        bool usuarioAtualCriouEncontro =
+            participanteAtual.Papel == PapelDoParticipanteDoEncontro.Organizador;
+        bool podeVisualizarPreferenciasDoAniversario =
+            usuarioAtualCriouEncontro || usuarioAtualConfirmouPresenca;
 
         return new(
             encontro.Identificador,
@@ -56,7 +60,10 @@ public sealed class ObtenhaDetalhesDoEncontro(
             presencasConfirmadas,
             encontro.Tipo,
             encontro.Localizacao?.Latitude,
-            encontro.Localizacao?.Longitude);
+            encontro.Localizacao?.Longitude,
+            podeVisualizarPreferenciasDoAniversario
+                ? CriePreferenciasDoAniversarioResposta(encontro.PreferenciasDoAniversario)
+                : null);
     }
 
     private async Task<ParticipanteDoEncontro> ObtenhaParticipanteAtualAsync(
@@ -156,5 +163,18 @@ public sealed class ObtenhaDetalhesDoEncontro(
         {
             throw new UnauthorizedAccessException("Usuário não autenticado.");
         }
+    }
+
+    private static PreferenciasDoAniversarioResposta? CriePreferenciasDoAniversarioResposta(
+        PreferenciasDoAniversario? preferencias)
+    {
+        return preferencias is null
+            ? null
+            : new(
+                preferencias.NumeroDoCalcado,
+                preferencias.TamanhoDaCamiseta,
+                preferencias.TamanhoDaCalca,
+                preferencias.SugestoesDePresente,
+                preferencias.CoisasQueGostariaDeGanhar);
     }
 }

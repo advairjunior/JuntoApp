@@ -25,6 +25,7 @@
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Juntô">
   <link rel="apple-touch-icon" href="icons/Icon-192.png?v=junto-20260715">
@@ -37,6 +38,38 @@
   <link rel="manifest" href="manifest.json?v=junto-20260715">
 </head>
 <body style="margin: 0; background: #050D0B;">
+  <script>
+    let conviteDeInstalacaoDoJunto = null;
+
+    window.addEventListener('beforeinstallprompt', (evento) => {
+      evento.preventDefault();
+      conviteDeInstalacaoDoJunto = evento;
+    });
+
+    window.addEventListener('appinstalled', () => {
+      conviteDeInstalacaoDoJunto = null;
+    });
+
+    window.juntoEstaInstalado = () =>
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true;
+
+    window.juntoPodeInstalar = () => conviteDeInstalacaoDoJunto !== null;
+
+    window.juntoEhIos = () =>
+      /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+
+    window.juntoSoliciteInstalacao = async () => {
+      if (conviteDeInstalacaoDoJunto === null) {
+        return false;
+      }
+
+      conviteDeInstalacaoDoJunto.prompt();
+      const escolha = await conviteDeInstalacaoDoJunto.userChoice;
+      conviteDeInstalacaoDoJunto = null;
+      return escolha.outcome === 'accepted';
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -72,6 +72,29 @@ public sealed class MapeamentoDeEncontro : IEntityTypeConfiguration<Encontro>
             .HasColumnName("tipo")
             .HasMaxLength(Encontro.TamanhoMaximoDoTipo);
 
+        construtor.OwnsOne(encontro => encontro.PreferenciasDoAniversario, preferencias =>
+        {
+            preferencias.Property(item => item.NumeroDoCalcado)
+                .HasColumnName("numero_do_calcado")
+                .HasMaxLength(PreferenciasDoAniversario.TamanhoMaximoDoNumeroDoCalcado);
+
+            preferencias.Property(item => item.TamanhoDaCamiseta)
+                .HasColumnName("tamanho_da_camiseta")
+                .HasMaxLength(PreferenciasDoAniversario.TamanhoMaximoDoTamanhoDaCamiseta);
+
+            preferencias.Property(item => item.TamanhoDaCalca)
+                .HasColumnName("tamanho_da_calca")
+                .HasMaxLength(PreferenciasDoAniversario.TamanhoMaximoDoTamanhoDaCalca);
+
+            preferencias.Property(item => item.SugestoesDePresente)
+                .HasColumnName("sugestoes_de_presente")
+                .HasMaxLength(PreferenciasDoAniversario.TamanhoMaximoDasSugestoesDePresente);
+
+            preferencias.Property(item => item.CoisasQueGostariaDeGanhar)
+                .HasColumnName("coisas_que_gostaria_de_ganhar")
+                .HasMaxLength(PreferenciasDoAniversario.TamanhoMaximoDasCoisasQueGostariaDeGanhar);
+        });
+
         construtor.Property(encontro => encontro.UrlDaImagemDeCapa)
             .HasColumnName("url_da_imagem_de_capa")
             .HasMaxLength(Encontro.TamanhoMaximoDaUrlDaImagemDeCapa);

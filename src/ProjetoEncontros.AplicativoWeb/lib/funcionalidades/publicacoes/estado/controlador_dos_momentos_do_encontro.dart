@@ -42,6 +42,7 @@ class ControladorDosMomentosDoEncontro
   final IRepositorioDeMemoriasDoEncontro _repositorioDeMemorias;
   String? _identificadorDaOperacaoDaPublicacaoPendente;
   String? _textoDaPublicacaoPendente;
+  String? _identificadorDaPublicacaoRespondidaPendente;
 
   Future<void> carregueAsync() async {
     EncontroDetalhado? encontroAtual = state.encontro;
@@ -57,10 +58,7 @@ class ControladorDosMomentosDoEncontro
         _identificadorDoEncontro,
       );
       List<PublicacaoDoEncontro> publicacoes =
-          await _repositorioDePublicacoes.listeAsync(
-        _identificadorDoEncontro,
-      );
-      publicacoes.sort(_comparePublicacoes);
+          await _listePublicacoesEMarqueVisualizacaoAsync();
 
       state = EstadoDosMomentosDoEncontro(
         situacao: SituacaoDosMomentosDoEncontro.carregado,
@@ -85,7 +83,10 @@ class ControladorDosMomentosDoEncontro
     }
   }
 
-  Future<bool> publiqueAsync(String texto) async {
+  Future<bool> publiqueAsync(
+    String texto, {
+    String? identificadorDaPublicacaoRespondida,
+  }) async {
     EncontroDetalhado? encontroAtual = state.encontro;
     String textoNormalizado = texto.trim();
 
@@ -103,10 +104,14 @@ class ControladorDosMomentosDoEncontro
       estaPublicando: true,
     );
     if (_identificadorDaOperacaoDaPublicacaoPendente == null ||
-        _textoDaPublicacaoPendente != textoNormalizado) {
+        _textoDaPublicacaoPendente != textoNormalizado ||
+        _identificadorDaPublicacaoRespondidaPendente !=
+            identificadorDaPublicacaoRespondida) {
       _identificadorDaOperacaoDaPublicacaoPendente =
           crieIdentificadorDaOperacao();
       _textoDaPublicacaoPendente = textoNormalizado;
+      _identificadorDaPublicacaoRespondidaPendente =
+          identificadorDaPublicacaoRespondida;
     }
 
     try {
@@ -114,8 +119,9 @@ class ControladorDosMomentosDoEncontro
           await _repositorioDePublicacoes.publiqueAsync(
         identificadorDoEncontro: _identificadorDoEncontro,
         texto: textoNormalizado,
-        identificadorDaOperacao:
-            _identificadorDaOperacaoDaPublicacaoPendente!,
+        identificadorDaOperacao: _identificadorDaOperacaoDaPublicacaoPendente!,
+        identificadorDaPublicacaoRespondida:
+            identificadorDaPublicacaoRespondida,
       );
       List<PublicacaoDoEncontro> publicacoes = <PublicacaoDoEncontro>[
         ...state.publicacoes.where(
@@ -132,6 +138,7 @@ class ControladorDosMomentosDoEncontro
       );
       _identificadorDaOperacaoDaPublicacaoPendente = null;
       _textoDaPublicacaoPendente = null;
+      _identificadorDaPublicacaoRespondidaPendente = null;
       return true;
     } on ExcecaoDaApi catch (excecao) {
       state = EstadoDosMomentosDoEncontro(
@@ -167,10 +174,12 @@ class ControladorDosMomentosDoEncontro
           await _repositorioDeEncontros.obtenhaEncontroAsync(
         _identificadorDoEncontro,
       );
+      List<PublicacaoDoEncontro> publicacoes =
+          await _listePublicacoesEMarqueVisualizacaoAsync();
       state = EstadoDosMomentosDoEncontro(
         situacao: SituacaoDosMomentosDoEncontro.carregado,
         encontro: encontroAtualizado,
-        publicacoes: state.publicacoes,
+        publicacoes: publicacoes,
       );
       return true;
     } on ExcecaoDaApi catch (excecao) {
@@ -184,8 +193,8 @@ class ControladorDosMomentosDoEncontro
     }
   }
 
-  Future<bool> publiqueImagemAsync(
-    ImagemSelecionada imagem,
+  Future<bool> publiqueMidiasAsync(
+    List<MidiaSelecionada> midias,
     String legenda,
   ) async {
     EncontroDetalhado? encontroAtual = state.encontro;
@@ -193,6 +202,7 @@ class ControladorDosMomentosDoEncontro
 
     if (encontroAtual == null ||
         state.estaPublicando ||
+        midias.isEmpty ||
         legendaNormalizada.length > 280) {
       return false;
     }
@@ -206,11 +216,9 @@ class ControladorDosMomentosDoEncontro
 
     try {
       MemoriaDoEncontro memoria =
-          await _repositorioDeMemorias.publiqueImagemAsync(
+          await _repositorioDeMemorias.publiqueMidiasAsync(
         identificadorDoEncontro: _identificadorDoEncontro,
-        nomeDoArquivo: imagem.nome,
-        tipoDeConteudo: imagem.tipoDeConteudo,
-        conteudo: imagem.conteudo,
+        midias: midias,
         legenda: legendaNormalizada,
       );
       PublicacaoDoEncontro publicacao = memoria.convertaParaPublicacao();
@@ -278,6 +286,28 @@ class ControladorDosMomentosDoEncontro
       );
       return false;
     }
+  }
+
+  Future<List<PublicacaoDoEncontro>>
+      _listePublicacoesEMarqueVisualizacaoAsync() async {
+    List<PublicacaoDoEncontro> publicacoes =
+        await _repositorioDePublicacoes.listeAsync(
+      _identificadorDoEncontro,
+    );
+    publicacoes.sort(_comparePublicacoes);
+
+    if (publicacoes.isNotEmpty) {
+      try {
+        await _repositorioDePublicacoes.marqueVisualizacaoAsync(
+          identificadorDoEncontro: _identificadorDoEncontro,
+          identificadorDaUltimaPublicacao: publicacoes.last.identificador,
+        );
+      } on ExcecaoDaApi {
+        // A confirmação de leitura não deve impedir a exibição do mural.
+      }
+    }
+
+    return publicacoes;
   }
 
   int _comparePublicacoes(

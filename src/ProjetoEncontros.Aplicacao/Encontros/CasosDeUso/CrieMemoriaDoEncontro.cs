@@ -20,15 +20,24 @@ public sealed class CrieMemoriaDoEncontro(
     [
         "image/jpeg",
         "image/png",
-        "image/webp"
+        "image/webp",
+        "video/mp4",
+        "video/quicktime",
+        "video/webm"
     ];
+    private const int QuantidadeMaximaDeMidias = 10;
 
     public async Task<MemoriaDoEncontroResposta> CrieAsync(
         CrieMemoriaDoEncontroComando comando,
         CancellationToken cancellationToken)
     {
         ValideComando(comando);
-        await ValidadorDeImagem.ValideAsync(comando.Conteudo, comando.TipoDeConteudo, cancellationToken);
+
+        foreach (ArquivoDaMemoriaComando arquivo in comando.Arquivos)
+        {
+            await ValideConteudoAsync(arquivo, cancellationToken);
+        }
+
         Encontro encontro = await ObtenhaEncontroAsync(comando.IdentificadorDoEncontro, cancellationToken);
 
         ParticipanteDoEncontro participante = await ObtenhaParticipanteAsync(
@@ -62,15 +71,11 @@ public sealed class CrieMemoriaDoEncontro(
                 await repositorioDeMemoriasDoEncontro.ListeMidiasDasMemoriasAsync(
                     [memoriaExistente.Identificador],
                     cancellationToken);
-            MidiaDaMemoria? midiaExistente = midiasExistentes.SingleOrDefault();
 
-            if (midiaExistente is null
-                || midiaExistente.NomeOriginal != comando.NomeDoArquivo.Trim()
-                || midiaExistente.TipoDeConteudo != comando.TipoDeConteudo.Trim()
-                || midiaExistente.TamanhoEmBytes != comando.TamanhoEmBytes)
+            if (!ArquivosCorrespondem(comando.Arquivos, midiasExistentes))
             {
                 throw new ExcecaoDeAplicacaoException(
-                    "O identificador da operação já foi utilizado com um arquivo diferente.");
+                    "O identificador da operação já foi utilizado com arquivos diferentes.");
             }
 
             return CrieResposta(
@@ -87,52 +92,75 @@ public sealed class CrieMemoriaDoEncontro(
             comando.Legenda,
             relogio.Agora);
 
-        string url = await armazenamentoDeMidiasDeMemoria.SalveAsync(
-            identificadorDaOperacao,
-            comando.IdentificadorDoUsuario,
-            encontro.Identificador,
-            memoria.Identificador,
-            comando.NomeDoArquivo,
-            comando.TipoDeConteudo,
-            comando.TamanhoEmBytes,
-            comando.Conteudo,
-            cancellationToken);
-
-        MidiaDaMemoria midia;
+        List<string> referenciasDosArquivos = [];
+        List<MidiaDaMemoria> midias = [];
 
         try
         {
-            midia = MidiaDaMemoria.Crie(
-                Guid.NewGuid(),
-                memoria.Identificador,
-                url,
-                comando.NomeDoArquivo,
-                comando.TipoDeConteudo,
-                comando.TamanhoEmBytes,
-                relogio.Agora);
+            int indiceDoArquivo = 0;
+
+            foreach (ArquivoDaMemoriaComando arquivo in comando.Arquivos)
+            {
+                Guid identificadorDoEnvio = indiceDoArquivo == 0
+                    ? identificadorDaOperacao
+                    : Guid.NewGuid();
+                string url = await armazenamentoDeMidiasDeMemoria.SalveAsync(
+                    identificadorDoEnvio,
+                    comando.IdentificadorDoUsuario,
+                    encontro.Identificador,
+                    memoria.Identificador,
+                    arquivo.NomeDoArquivo,
+                    arquivo.TipoDeConteudo,
+                    arquivo.TamanhoEmBytes,
+                    arquivo.Conteudo,
+                    cancellationToken);
+                MidiaDaMemoria midia = MidiaDaMemoria.Crie(
+                    Guid.NewGuid(),
+                    memoria.Identificador,
+                    url,
+                    arquivo.NomeDoArquivo,
+                    arquivo.TipoDeConteudo,
+                    arquivo.TamanhoEmBytes,
+                    relogio.Agora);
+
+                referenciasDosArquivos.Add(url);
+                midias.Add(midia);
+                indiceDoArquivo++;
+            }
+
+            MidiaDaMemoria midiaPrincipal = midias[0];
             PublicacaoDoEncontro publicacao = PublicacaoDoEncontro.CrieComMidia(
                 memoria.Identificador,
                 encontro.Identificador,
                 comando.IdentificadorDoUsuario,
                 comando.Legenda,
-                midia.Url,
-                midia.NomeOriginal,
-                midia.TipoDeConteudo,
-                midia.TamanhoEmBytes,
+                midiaPrincipal.Url,
+                midiaPrincipal.NomeOriginal,
+                midiaPrincipal.TipoDeConteudo,
+                midiaPrincipal.TamanhoEmBytes,
                 memoria.CriadoEm);
 
             await repositorioDeMemoriasDoEncontro.AdicioneMemoriaAsync(memoria, cancellationToken);
-            await repositorioDeMemoriasDoEncontro.AdicioneMidiaAsync(midia, cancellationToken);
+
+            foreach (MidiaDaMemoria midia in midias)
+            {
+                await repositorioDeMemoriasDoEncontro.AdicioneMidiaAsync(midia, cancellationToken);
+            }
+
             await repositorioDeEncontros.AdicionePublicacaoAsync(publicacao, cancellationToken);
             await unidadeDeTrabalho.SalveAlteracoesAsync(cancellationToken);
         }
         catch
         {
-            await TenteRemoverAsync(url);
+            foreach (string referenciaDoArquivo in referenciasDosArquivos)
+            {
+                await TenteRemoverAsync(referenciaDoArquivo);
+            }
+
             throw;
         }
 
-        return CrieResposta(memoria, autor, comando.IdentificadorDoUsuario, [midia]);
+        return CrieResposta(memoria, autor, comando.IdentificadorDoUsuario, midias);
     }
 
     private async Task TenteRemoverAsync(string referenciaDoArquivo)
@@ -202,25 +230,89 @@ public sealed class CrieMemoriaDoEncontro(
             throw new ExcecaoDeAplicacaoException("O identificador do encontro e obrigatório.");
         }
 
-        if (!TiposDeConteudoPermitidos.Contains(comando.TipoDeConteudo))
+        if (comando.Arquivos.Count == 0)
         {
-            throw new ExcecaoDeAplicacaoException("A memória deve ser uma imagem JPEG, PNG ou WEBP.");
+            throw new ExcecaoDeAplicacaoException("Ao menos uma mídia é obrigatória.");
         }
 
-        if (comando.TamanhoEmBytes <= 0)
+        if (comando.Arquivos.Count > QuantidadeMaximaDeMidias)
         {
-            throw new ExcecaoDeAplicacaoException("O arquivo da memória deve ter conteúdo.");
+            throw new ExcecaoDeAplicacaoException(
+                $"Uma publicação pode conter no máximo {QuantidadeMaximaDeMidias} mídias.");
         }
 
-        if (comando.TamanhoEmBytes > MidiaDaMemoria.TamanhoMaximoEmBytes)
+        foreach (ArquivoDaMemoriaComando arquivo in comando.Arquivos)
         {
-            throw new ExcecaoDeAplicacaoException("A imagem da memória não pode ultrapassar 10 MB.");
+            if (!TiposDeConteudoPermitidos.Contains(arquivo.TipoDeConteudo))
+            {
+                throw new ExcecaoDeAplicacaoException(
+                    "A mídia deve ser uma imagem JPEG, PNG ou WEBP, ou um vídeo MP4, MOV ou WEBM.");
+            }
+
+            if (arquivo.TamanhoEmBytes <= 0)
+            {
+                throw new ExcecaoDeAplicacaoException("O arquivo da memória deve ter conteúdo.");
+            }
+
+            if (arquivo.TamanhoEmBytes > MidiaDaMemoria.TamanhoMaximoEmBytes)
+            {
+                throw new ExcecaoDeAplicacaoException(
+                    "Cada mídia da memória não pode ultrapassar 10 MB.");
+            }
+
+            if (arquivo.Conteudo == Stream.Null)
+            {
+                throw new ExcecaoDeAplicacaoException("O arquivo da memória é obrigatório.");
+            }
+        }
+    }
+
+    private static Task ValideConteudoAsync(
+        ArquivoDaMemoriaComando arquivo,
+        CancellationToken cancellationToken)
+    {
+        return arquivo.TipoDeConteudo.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
+            ? ValidadorDeVideo.ValideAsync(
+                arquivo.Conteudo,
+                arquivo.TipoDeConteudo,
+                cancellationToken)
+            : ValidadorDeImagem.ValideAsync(
+                arquivo.Conteudo,
+                arquivo.TipoDeConteudo,
+                cancellationToken);
+    }
+
+    private static bool ArquivosCorrespondem(
+        IReadOnlyCollection<ArquivoDaMemoriaComando> arquivos,
+        IReadOnlyCollection<MidiaDaMemoria> midias)
+    {
+        if (arquivos.Count != midias.Count)
+        {
+            return false;
         }
 
-        if (comando.Conteudo == Stream.Null)
-        {
-            throw new ExcecaoDeAplicacaoException("O arquivo da memória é obrigatório.");
-        }
+        List<string> assinaturasDosArquivos = [.. arquivos
+            .Select(arquivo => CrieAssinatura(
+                arquivo.NomeDoArquivo,
+                arquivo.TipoDeConteudo,
+                arquivo.TamanhoEmBytes))
+            .Order()];
+        List<string> assinaturasDasMidias = [.. midias
+            .Select(midia => CrieAssinatura(
+                midia.NomeOriginal ?? string.Empty,
+                midia.TipoDeConteudo,
+                midia.TamanhoEmBytes))
+            .Order()];
+
+        return assinaturasDosArquivos.SequenceEqual(assinaturasDasMidias);
+    }
+
+    private static string CrieAssinatura(
+        string nomeDoArquivo,
+        string tipoDeConteudo,
+        long tamanhoEmBytes)
+    {
+        return $"{nomeDoArquivo.Trim()}\u001F{tipoDeConteudo.Trim()}\u001F{tamanhoEmBytes}";
     }
 
     private static MemoriaDoEncontroResposta CrieResposta(

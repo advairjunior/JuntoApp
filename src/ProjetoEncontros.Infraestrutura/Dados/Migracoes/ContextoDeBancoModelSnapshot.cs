@@ -252,6 +252,58 @@ namespace ProjetoEncontros.Infraestrutura.Dados.Migracoes
                     b.ToTable("tokens_de_atualizacao", (string)null);
                 });
 
+            modelBuilder.Entity("ProjetoEncontros.Dominio.Encontros.ConviteDoEncontroPorLink", b =>
+                {
+                    b.Property<Guid>("Identificador")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identificador");
+
+                    b.Property<DateTimeOffset>("CriadoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("criado_em");
+
+                    b.Property<DateTimeOffset>("ExpiraEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expira_em");
+
+                    b.Property<string>("HashDoToken")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .HasColumnName("hash_do_token")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("IdentificadorDoEncontro")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identificador_do_encontro");
+
+                    b.Property<Guid>("IdentificadorDoUsuarioQueCriou")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identificador_do_usuario_que_criou");
+
+                    b.Property<DateTimeOffset?>("RevogadoEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revogado_em");
+
+                    b.HasKey("Identificador");
+
+                    b.HasIndex("HashDoToken")
+                        .IsUnique();
+
+                    b.HasIndex("IdentificadorDoEncontro")
+                        .IsUnique()
+                        .HasFilter("revogado_em IS NULL");
+
+                    b.HasIndex("IdentificadorDoUsuarioQueCriou");
+
+                    b.ToTable("convites_do_encontro_por_link", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_convites_encontro_link_expiracao", "expira_em > criado_em");
+
+                            t.HasCheckConstraint("ck_convites_encontro_link_revogacao", "revogado_em IS NULL OR revogado_em >= criado_em");
+                        });
+                });
+
             modelBuilder.Entity("ProjetoEncontros.Dominio.Encontros.Encontro", b =>
                 {
                     b.Property<Guid>("Identificador")
@@ -492,6 +544,10 @@ namespace ProjetoEncontros.Infraestrutura.Dados.Migracoes
                         .HasColumnType("character varying(30)")
                         .HasColumnName("situacao");
 
+                    b.Property<DateTimeOffset>("VisualizadoAteEm")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("visualizado_ate_em");
+
                     b.HasKey("Identificador");
 
                     b.HasIndex("IdentificadorDoEncontro", "IdentificadorDoUsuario")
@@ -562,6 +618,10 @@ namespace ProjetoEncontros.Infraestrutura.Dados.Migracoes
                         .HasDefaultValue(false)
                         .HasColumnName("eh_atualizacao_do_sistema");
 
+                    b.Property<Guid?>("IdentificadorDaPublicacaoRespondida")
+                        .HasColumnType("uuid")
+                        .HasColumnName("identificador_da_publicacao_respondida");
+
                     b.Property<Guid>("IdentificadorDoEncontro")
                         .HasColumnType("uuid")
                         .HasColumnName("identificador_do_encontro");
@@ -603,6 +663,8 @@ namespace ProjetoEncontros.Infraestrutura.Dados.Migracoes
                         .HasColumnName("url_da_midia");
 
                     b.HasKey("Identificador");
+
+                    b.HasIndex("IdentificadorDaPublicacaoRespondida");
 
                     b.HasIndex("IdentificadorDoUsuarioAutor");
 
@@ -921,6 +983,21 @@ namespace ProjetoEncontros.Infraestrutura.Dados.Migracoes
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ProjetoEncontros.Dominio.Encontros.ConviteDoEncontroPorLink", b =>
+                {
+                    b.HasOne("ProjetoEncontros.Dominio.Encontros.Encontro", null)
+                        .WithMany()
+                        .HasForeignKey("IdentificadorDoEncontro")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("ProjetoEncontros.Dominio.Usuarios.Usuario", null)
+                        .WithMany()
+                        .HasForeignKey("IdentificadorDoUsuarioQueCriou")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("ProjetoEncontros.Dominio.Encontros.Encontro", b =>
                 {
                     b.HasOne("ProjetoEncontros.Dominio.Grupos.Grupo", null)
@@ -961,7 +1038,47 @@ namespace ProjetoEncontros.Infraestrutura.Dados.Migracoes
                                 .HasForeignKey("EncontroIdentificador");
                         });
 
+                    b.OwnsOne("ProjetoEncontros.Dominio.Encontros.PreferenciasDoAniversario", "PreferenciasDoAniversario", b1 =>
+                        {
+                            b1.Property<Guid>("EncontroIdentificador")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("CoisasQueGostariaDeGanhar")
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)")
+                                .HasColumnName("coisas_que_gostaria_de_ganhar");
+
+                            b1.Property<string>("NumeroDoCalcado")
+                                .HasMaxLength(30)
+                                .HasColumnType("character varying(30)")
+                                .HasColumnName("numero_do_calcado");
+
+                            b1.Property<string>("SugestoesDePresente")
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)")
+                                .HasColumnName("sugestoes_de_presente");
+
+                            b1.Property<string>("TamanhoDaCalca")
+                                .HasMaxLength(30)
+                                .HasColumnType("character varying(30)")
+                                .HasColumnName("tamanho_da_calca");
+
+                            b1.Property<string>("TamanhoDaCamiseta")
+                                .HasMaxLength(30)
+                                .HasColumnType("character varying(30)")
+                                .HasColumnName("tamanho_da_camiseta");
+
+                            b1.HasKey("EncontroIdentificador");
+
+                            b1.ToTable("encontros");
+
+                            b1.WithOwner()
+                                .HasForeignKey("EncontroIdentificador");
+                        });
+
                     b.Navigation("Localizacao");
+
+                    b.Navigation("PreferenciasDoAniversario");
                 });
 
             modelBuilder.Entity("ProjetoEncontros.Dominio.Encontros.ItemDoEncontro", b =>
@@ -1040,6 +1157,11 @@ namespace ProjetoEncontros.Infraestrutura.Dados.Migracoes
 
             modelBuilder.Entity("ProjetoEncontros.Dominio.Encontros.PublicacaoDoEncontro", b =>
                 {
+                    b.HasOne("ProjetoEncontros.Dominio.Encontros.PublicacaoDoEncontro", null)
+                        .WithMany()
+                        .HasForeignKey("IdentificadorDaPublicacaoRespondida")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("ProjetoEncontros.Dominio.Encontros.Encontro", null)
                         .WithMany()
                         .HasForeignKey("IdentificadorDoEncontro")

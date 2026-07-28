@@ -13,4 +13,5 @@ public sealed record PublicacaoDoEncontroResposta(
     long? TamanhoDaMidiaEmBytes,
     DateTimeOffset PublicadoEm,
     bool EhAtualizacaoDoSistema,
-    bool UsuarioAtual);
+    bool UsuarioAtual,
+    PublicacaoRespondidaResposta? PublicacaoRespondida);

@@ -1,10 +1,13 @@
 {
     "name": "Juntô",
     "short_name": "Juntô",
+    "id": "./",
     "start_url": ".",
+    "scope": ".",
     "display": "standalone",
     "background_color": "#050D0B",
     "theme_color": "#050D0B",
+    "lang": "pt-BR",
     "description": "Organize encontros e guarde as melhores memórias do seu grupo.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,

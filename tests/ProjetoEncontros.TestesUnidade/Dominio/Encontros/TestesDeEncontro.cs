@@ -272,6 +272,113 @@ public sealed class TestesDeEncontro
     }
 
     [Fact]
+    public void CrieSemGrupo_DeveCriarAniversarioComPreferenciasNormalizadas()
+    {
+        PreferenciasDoAniversario preferencias = PreferenciasDoAniversario.Crie(
+            " 42 ",
+            " M ",
+            " 40 ",
+            " Livros ",
+            " Camisa do Brasil ")!;
+
+        Encontro encontro = Encontro.CrieSemGrupo(
+            IdentificadorDoEncontro,
+            "Aniversário da Ana",
+            null,
+            null,
+            InicioEm,
+            IdentificadorDoUsuarioQueCriou,
+            CriadoEm,
+            Encontro.TipoAniversario,
+            preferenciasDoAniversario: preferencias);
+
+        Assert.Equal("42", encontro.PreferenciasDoAniversario!.NumeroDoCalcado);
+        Assert.Equal("M", encontro.PreferenciasDoAniversario.TamanhoDaCamiseta);
+        Assert.Equal("40", encontro.PreferenciasDoAniversario.TamanhoDaCalca);
+        Assert.Equal("Livros", encontro.PreferenciasDoAniversario.SugestoesDePresente);
+        Assert.Equal("Camisa do Brasil", encontro.PreferenciasDoAniversario.CoisasQueGostariaDeGanhar);
+    }
+
+    [Fact]
+    public void CrieSemGrupo_DeveRejeitarPreferenciasEmTipoDiferenteDeAniversario()
+    {
+        PreferenciasDoAniversario preferencias = PreferenciasDoAniversario.Crie(
+            "42",
+            null,
+            null,
+            null,
+            null)!;
+
+        Assert.Throws<ExcecaoDeDominioException>(() =>
+            Encontro.CrieSemGrupo(
+                IdentificadorDoEncontro,
+                "Jogo",
+                null,
+                null,
+                InicioEm,
+                IdentificadorDoUsuarioQueCriou,
+                CriadoEm,
+                "Jogo",
+                preferenciasDoAniversario: preferencias));
+    }
+
+    [Fact]
+    public void AltereDados_DeveRemoverPreferenciasAoTrocarTipoDoAniversario()
+    {
+        PreferenciasDoAniversario preferencias = PreferenciasDoAniversario.Crie(
+            "42",
+            null,
+            null,
+            null,
+            null)!;
+        Encontro encontro = Encontro.CrieSemGrupo(
+            IdentificadorDoEncontro,
+            "Aniversário da Ana",
+            null,
+            null,
+            InicioEm,
+            IdentificadorDoUsuarioQueCriou,
+            CriadoEm,
+            Encontro.TipoAniversario,
+            preferenciasDoAniversario: preferencias);
+
+        encontro.AltereDados(
+            encontro.Titulo,
+            encontro.Descricao,
+            encontro.Local,
+            encontro.InicioEm,
+            CriadoEm.AddMinutes(1),
+            "Amigos");
+
+        Assert.Null(encontro.PreferenciasDoAniversario);
+    }
+
+    [Fact]
+    public void CriePreferenciasDoAniversario_DeveRetornarNuloQuandoTodosOsCamposEstiveremVazios()
+    {
+        PreferenciasDoAniversario? preferencias = PreferenciasDoAniversario.Crie(
+            " ",
+            null,
+            string.Empty,
+            "   ",
+            null);
+
+        Assert.Null(preferencias);
+    }
+
+    [Fact]
+    public void CriePreferenciasDoAniversario_DeveRejeitarCampoAcimaDoLimite()
+    {
+        Assert.Throws<ExcecaoDeDominioException>(() =>
+            PreferenciasDoAniversario.Crie(
+                new string('1', PreferenciasDoAniversario.TamanhoMaximoDoNumeroDoCalcado + 1),
+                null,
+                null,
+                null,
+                null));
+    }
+
+    [Fact]
     public void AltereDados_DeveRejeitarEncontroCancelado()
     {
         Encontro encontro = CrieEncontro();
@@ -358,6 +465,7 @@ public sealed class TestesDeEncontro
         Assert.True(participante.EhOrganizador);
         Assert.True(participante.PodeAcessarEncontro);
         Assert.Equal(CriadoEm, participante.RespondidoEm);
+        Assert.Equal(CriadoEm, participante.VisualizadoAteEm);
     }
 
     [Fact]
@@ -374,6 +482,81 @@ public sealed class TestesDeEncontro
         Assert.False(participante.EhOrganizador);
         Assert.True(participante.PodeAcessarEncontro);
         Assert.Null(participante.RespondidoEm);
+        Assert.Equal(CriadoEm, participante.VisualizadoAteEm);
+    }
+
+    [Fact]
+    public void AvanceVisualizacaoAte_DeveAvancarMonotonicamente()
+    {
+        ParticipanteDoEncontro participante = ParticipanteDoEncontro.CrieOrganizador(
+            IdentificadorDoParticipante,
+            IdentificadorDoEncontro,
+            IdentificadorDoUsuarioQueCriou,
+            CriadoEm);
+        DateTimeOffset visualizacaoMaisRecente = CriadoEm.AddMinutes(10);
+
+        participante.AvanceVisualizacaoAte(visualizacaoMaisRecente);
+        participante.AvanceVisualizacaoAte(CriadoEm.AddMinutes(5));
+
+        Assert.Equal(visualizacaoMaisRecente, participante.VisualizadoAteEm);
+    }
+
+    [Fact]
+    public void AlterePapel_DevePromoverConvidadoAtivoAAdministrador()
+    {
+        ParticipanteDoEncontro participante = ParticipanteDoEncontro.CrieConvidado(
+            IdentificadorDoParticipante,
+            IdentificadorDoEncontro,
+            IdentificadorDoUsuarioQueCriou,
+            CriadoEm);
+
+        participante.AlterePapel(PapelDoParticipanteDoEncontro.Administrador);
+
+        Assert.Equal(PapelDoParticipanteDoEncontro.Administrador, participante.Papel);
+        Assert.True(participante.EhOrganizador);
+    }
+
+    [Fact]
+    public void AlterePapel_DeveRebaixarAdministradorAConvidado()
+    {
+        ParticipanteDoEncontro participante = ParticipanteDoEncontro.CrieConvidado(
+            IdentificadorDoParticipante,
+            IdentificadorDoEncontro,
+            IdentificadorDoUsuarioQueCriou,
+            CriadoEm);
+        participante.AlterePapel(PapelDoParticipanteDoEncontro.Administrador);
+
+        participante.AlterePapel(PapelDoParticipanteDoEncontro.Convidado);
+
+        Assert.Equal(PapelDoParticipanteDoEncontro.Convidado, participante.Papel);
+        Assert.False(participante.EhOrganizador);
+    }
+
+    [Fact]
+    public void AlterePapel_DeveBloquearAlteracaoDoOrganizador()
+    {
+        ParticipanteDoEncontro participante = ParticipanteDoEncontro.CrieOrganizador(
+            IdentificadorDoParticipante,
+            IdentificadorDoEncontro,
+            IdentificadorDoUsuarioQueCriou,
+            CriadoEm);
+
+        Assert.Throws<ExcecaoDeDominioException>(() =>
+            participante.AlterePapel(PapelDoParticipanteDoEncontro.Administrador));
+    }
+
+    [Fact]
+    public void AlterePapel_DeveBloquearParticipanteRemovido()
+    {
+        ParticipanteDoEncontro participante = ParticipanteDoEncontro.CrieConvidado(
+            IdentificadorDoParticipante,
+            IdentificadorDoEncontro,
+            IdentificadorDoUsuarioQueCriou,
+            CriadoEm);
+        participante.Remova(CriadoEm.AddMinutes(1));
+
+        Assert.Throws<ExcecaoDeDominioException>(() =>
+            participante.AlterePapel(PapelDoParticipanteDoEncontro.Administrador));
     }
 
     [Fact]

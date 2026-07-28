@@ -40,7 +40,13 @@ public static class ConfiguracaoDaAplicacao
         servicos.AddScoped<CrieEncontroDireto>();
         servicos.AddScoped<BusqueLocalizacoes>();
         servicos.AddScoped<CrieConviteDoEncontro>();
+        servicos.AddScoped<ObtenhaConviteDoEncontroPorLinkValido>();
+        servicos.AddScoped<CrieConviteDoEncontroPorLink>();
+        servicos.AddScoped<RevogueConviteDoEncontroPorLink>();
+        servicos.AddScoped<ConsulteConviteDoEncontroPorLink>();
+        servicos.AddScoped<AceiteConviteDoEncontroPorLink>();
         servicos.AddScoped<RemovaParticipanteDoEncontroDireto>();
+        servicos.AddScoped<AlterePapelDoParticipanteDoEncontro>();
         servicos.AddScoped<CriePublicacaoDoEncontro>();
         servicos.AddScoped<CrieMemoriaDoEncontro>();
         servicos.AddScoped<ListeConvitesDoEncontroDoUsuario>();
@@ -48,6 +54,7 @@ public static class ConfiguracaoDaAplicacao
         servicos.AddScoped<ListeEncontrosRealizadosDoUsuario>();
         servicos.AddScoped<ListeMemoriasDoEncontro>();
         servicos.AddScoped<ListePublicacoesDoEncontro>();
+        servicos.AddScoped<MarqueVisualizacaoDoEncontro>();
         servicos.AddScoped<AltereImagemDeCapaDoEncontro>();
         servicos.AddScoped<RemovaImagemDeCapaDoEncontro>();
         servicos.AddScoped<ObtenhaImagemDeCapaPrivada>();
@@ -68,6 +75,7 @@ public static class ConfiguracaoDaAplicacao
         servicos.AddScoped<RemovaMemoriaDoEncontro>();
         servicos.AddScoped<EditeEncontro>();
         servicos.AddScoped<EditeEncontroDireto>();
+        servicos.AddScoped<AlterePreferenciasDoAniversario>();
         servicos.AddScoped<CrieItemDoEncontro>();
         servicos.AddScoped<ListeItensDoEncontro>();
         servicos.AddScoped<EditeItemDoEncontro>();

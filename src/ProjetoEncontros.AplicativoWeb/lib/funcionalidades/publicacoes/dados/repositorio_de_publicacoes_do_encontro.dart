@@ -7,10 +7,16 @@ import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/mod
 abstract interface class IRepositorioDePublicacoesDoEncontro {
   Future<List<PublicacaoDoEncontro>> listeAsync(String identificadorDoEncontro);
 
+  Future<void> marqueVisualizacaoAsync({
+    required String identificadorDoEncontro,
+    required String identificadorDaUltimaPublicacao,
+  });
+
   Future<PublicacaoDoEncontro> publiqueAsync({
     required String identificadorDoEncontro,
     required String texto,
     required String identificadorDaOperacao,
+    String? identificadorDaPublicacaoRespondida,
   });
 }
 
@@ -53,15 +59,41 @@ class RepositorioDePublicacoesDoEncontro
   }
 
   @override
+  Future<void> marqueVisualizacaoAsync({
+    required String identificadorDoEncontro,
+    required String identificadorDaUltimaPublicacao,
+  }) async {
+    try {
+      await _clienteHttp.post<dynamic>(
+        '/api/encontros/$identificadorDoEncontro/visualizacao',
+        data: <String, dynamic>{
+          'identificadorDaUltimaPublicacao': identificadorDaUltimaPublicacao,
+        },
+      );
+    } on DioException catch (excecao) {
+      throw _convertaExcecao(
+        excecao,
+        'Não foi possível atualizar a visualização deste encontro.',
+      );
+    }
+  }
+
+  @override
   Future<PublicacaoDoEncontro> publiqueAsync({
     required String identificadorDoEncontro,
     required String texto,
     required String identificadorDaOperacao,
+    String? identificadorDaPublicacaoRespondida,
   }) async {
     try {
       Response<dynamic> resposta = await _clienteHttp.post<dynamic>(
         '/api/encontros/$identificadorDoEncontro/publicacoes',
-        data: <String, String>{'texto': texto},
+        data: <String, dynamic>{
+          'texto': texto,
+          if (identificadorDaPublicacaoRespondida != null)
+            'identificadorDaPublicacaoRespondida':
+                identificadorDaPublicacaoRespondida,
+        },
         options: Options(
           headers: <String, String>{
             'Idempotency-Key': identificadorDaOperacao,

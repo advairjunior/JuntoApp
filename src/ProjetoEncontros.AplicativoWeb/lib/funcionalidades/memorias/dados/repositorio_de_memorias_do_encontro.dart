@@ -1,20 +1,17 @@
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/comunicacao/cliente_http_autenticado.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/comunicacao/identificador_da_operacao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/erros/excecao_da_api.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/servicos/seletor_de_imagem.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/modelos/memoria_do_encontro.dart';
 
 abstract interface class IRepositorioDeMemoriasDoEncontro {
   Future<List<MemoriaDoEncontro>> listeAsync(String identificadorDoEncontro);
 
-  Future<MemoriaDoEncontro> publiqueImagemAsync({
+  Future<MemoriaDoEncontro> publiqueMidiasAsync({
     required String identificadorDoEncontro,
-    required String nomeDoArquivo,
-    required String tipoDeConteudo,
-    required Uint8List conteudo,
+    required List<MidiaSelecionada> midias,
     String? legenda,
   });
 
@@ -76,22 +73,24 @@ class RepositorioDeMemoriasDoEncontro
   }
 
   @override
-  Future<MemoriaDoEncontro> publiqueImagemAsync({
+  Future<MemoriaDoEncontro> publiqueMidiasAsync({
     required String identificadorDoEncontro,
-    required String nomeDoArquivo,
-    required String tipoDeConteudo,
-    required Uint8List conteudo,
+    required List<MidiaSelecionada> midias,
     String? legenda,
   }) async {
     String identificadorDaOperacao = crieIdentificadorDaOperacao();
 
     FormData crieFormulario() {
       return FormData.fromMap(<String, dynamic>{
-        'arquivo': MultipartFile.fromBytes(
-          conteudo,
-          filename: nomeDoArquivo,
-          contentType: DioMediaType.parse(tipoDeConteudo),
-        ),
+        'arquivos': midias
+            .map(
+              (MidiaSelecionada midia) => MultipartFile.fromBytes(
+                midia.conteudo,
+                filename: midia.nome,
+                contentType: DioMediaType.parse(midia.tipoDeConteudo),
+              ),
+            )
+            .toList(),
         if (legenda != null && legenda.trim().isNotEmpty)
           'legenda': legenda.trim(),
       });
@@ -117,7 +116,7 @@ class RepositorioDeMemoriasDoEncontro
     } on DioException catch (excecao) {
       throw _convertaExcecao(
         excecao,
-        'Não foi possível compartilhar esta foto.',
+        'Não foi possível compartilhar estas mídias.',
       );
     }
   }

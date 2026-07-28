@@ -1,5 +1,8 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/estado_vazio.dart';
@@ -7,6 +10,7 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/estru
 import 'package:projeto_encontros_aplicativo_web/compartilhado/configuracao/configuracao_do_ambiente.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/imagem_privada.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/foto_de_perfil.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/midias/video_privado.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/cores_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/raios_do_aplicativo.dart';
@@ -16,6 +20,7 @@ import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/model
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/servicos/seletor_de_imagem.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/dados/repositorio_de_memorias_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/inicio/estado/controlador_da_pagina_inicial.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/pessoas_frequentes/componentes/perfil_resumido_da_pessoa.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/estado/controlador_dos_momentos_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/estado/estado_dos_momentos_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/modelos/publicacao_do_encontro.dart';
@@ -50,8 +55,9 @@ class _EstadoDaTelaDeMomentosDoEncontro
 
   final TextEditingController _controladorDoTexto = TextEditingController();
   final ScrollController _controladorDaRolagem = ScrollController();
+  final FocusNode _focoDoTexto = FocusNode();
   bool _seletorDeEmojiEstaVisivel = false;
-  ImagemSelecionada? _imagemSelecionada;
+  PublicacaoDoEncontro? _publicacaoSendoRespondida;
   int _quantidadeAnteriorDePublicacoes = -1;
   bool _respostaDePresencaFoiSolicitada = false;
 
@@ -59,6 +65,7 @@ class _EstadoDaTelaDeMomentosDoEncontro
   void dispose() {
     _controladorDoTexto.dispose();
     _controladorDaRolagem.dispose();
+    _focoDoTexto.dispose();
     super.dispose();
   }
 
@@ -150,6 +157,9 @@ class _EstadoDaTelaDeMomentosDoEncontro
                           controladorDaRolagem: _controladorDaRolagem,
                           publicacoes: estado.publicacoes,
                           aoRemover: _confirmeRemocaoDaMemoriaAsync,
+                          aoResponder: _selecionePublicacaoParaResposta,
+                          aoAbrirPerfil: _abraPerfilDaPessoaAsync,
+                          respostaPorGestoEstaHabilitada: true,
                         ),
                       ),
                     ),
@@ -162,10 +172,11 @@ class _EstadoDaTelaDeMomentosDoEncontro
                         ),
                       _CompositorDeMomento(
                         controladorDoTexto: _controladorDoTexto,
+                        focoDoTexto: _focoDoTexto,
                         estaPublicando: estado.estaPublicando,
-                        imagemSelecionada: _imagemSelecionada,
-                        aoSelecionarImagem: _selecioneImagemAsync,
-                        aoRemoverImagem: _removaImagemSelecionada,
+                        publicacaoSendoRespondida: _publicacaoSendoRespondida,
+                        aoSelecionarImagem: _selecioneMidiasAsync,
+                        aoCancelarResposta: _canceleResposta,
                         aoAlternarEmojis: () {
                           setState(() {
                             _seletorDeEmojiEstaVisivel =
@@ -244,23 +255,32 @@ class _EstadoDaTelaDeMomentosDoEncontro
     );
   }
 
+  Future<void> _abraPerfilDaPessoaAsync(
+    PublicacaoDoEncontro publicacao,
+  ) async {
+    await mostrePerfilResumidoDaPessoaAsync(
+      context: context,
+      pessoa: PessoaDoEncontro(
+        identificadorDoUsuario: publicacao.identificadorDoUsuarioAutor,
+        nome: publicacao.nomeDoAutor,
+        urlDaFotoDePerfil: publicacao.urlDaFotoDePerfilDoAutor,
+      ),
+      identificadorDoEncontroAtual: widget.identificadorDoEncontro,
+    );
+  }
+
   Future<void> _publiqueAsync() async {
     String texto = _controladorDoTexto.text;
-    ImagemSelecionada? imagem = _imagemSelecionada;
 
-    if (texto.trim().isEmpty && imagem == null) {
+    if (texto.trim().isEmpty) {
       return;
     }
 
-    int tamanhoMaximo = imagem == null ? 1000 : 280;
-
-    if (texto.trim().length > tamanhoMaximo) {
+    if (texto.trim().length > 1000) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            imagem == null
-                ? 'A publicação não pode ultrapassar 1000 caracteres.'
-                : 'A legenda não pode ultrapassar 280 caracteres.',
+            'A publicação não pode ultrapassar 1000 caracteres.',
           ),
         ),
       );
@@ -272,54 +292,106 @@ class _EstadoDaTelaDeMomentosDoEncontro
         widget.identificadorDoEncontro,
       ).notifier,
     );
-    bool publicou = imagem == null
-        ? await controlador.publiqueAsync(texto)
-        : await controlador.publiqueImagemAsync(imagem, texto);
+    bool publicou = await controlador.publiqueAsync(
+      texto,
+      identificadorDaPublicacaoRespondida:
+          _publicacaoSendoRespondida?.identificador,
+    );
 
     if (publicou && mounted) {
       _controladorDoTexto.clear();
       setState(() {
         _seletorDeEmojiEstaVisivel = false;
-        _imagemSelecionada = null;
+        _publicacaoSendoRespondida = null;
       });
       _roleParaOFinal();
     }
   }
 
-  Future<void> _selecioneImagemAsync() async {
+  Future<void> _selecioneMidiasAsync() async {
     EnumeradorDeOrigemDaImagem? origem = await escolhaOrigemDaImagemAsync(
       context,
-      titulo: 'Foto do encontro',
+      titulo: 'Fotos e vídeos do encontro',
     );
 
     if (origem == null || !mounted) {
       return;
     }
 
-    ImagemSelecionada? imagem = await ref
+    List<MidiaSelecionada> midias = await ref
         .read(provedorDoSeletorDeImagem)
-        .selecionePorOrigemAsync(origem);
+        .selecioneMidiasPorOrigemAsync(origem);
 
-    if (!mounted || imagem == null) {
+    if (!mounted || midias.isEmpty) {
       return;
     }
 
-    if (imagem.conteudo.lengthInBytes > 10 * 1024 * 1024) {
+    if (midias.length > 10) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A foto não pode ultrapassar 10 MB.')),
+        const SnackBar(
+          content: Text('Selecione no máximo 10 mídias por publicação.'),
+        ),
       );
       return;
     }
 
-    setState(() {
-      _imagemSelecionada = imagem;
-      _seletorDeEmojiEstaVisivel = false;
-    });
+    if (midias.any(
+      (MidiaSelecionada midia) =>
+          midia.conteudo.lengthInBytes > 10 * 1024 * 1024,
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cada foto ou vídeo pode ter no máximo 10 MB.'),
+        ),
+      );
+      return;
+    }
+
+    String legendaInicial = _controladorDoTexto.text;
+    bool? publicou = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return _DialogoDeNovaPublicacao(
+          midias: midias,
+          legendaInicial: legendaInicial,
+          aoPublicar: (String legenda) {
+            return ref
+                .read(
+                  provedorDoControladorDosMomentosDoEncontro(
+                    widget.identificadorDoEncontro,
+                  ).notifier,
+                )
+                .publiqueMidiasAsync(midias, legenda);
+          },
+        );
+      },
+    );
+
+    if (publicou == true && mounted) {
+      _controladorDoTexto.clear();
+      setState(() {
+        _publicacaoSendoRespondida = null;
+        _seletorDeEmojiEstaVisivel = false;
+      });
+      ref.invalidate(
+        provedorDasMemoriasDoEncontro(widget.identificadorDoEncontro),
+      );
+      _roleParaOFinal();
+    }
   }
 
-  void _removaImagemSelecionada() {
+  void _selecionePublicacaoParaResposta(PublicacaoDoEncontro publicacao) {
     setState(() {
-      _imagemSelecionada = null;
+      _publicacaoSendoRespondida = publicacao;
+      _seletorDeEmojiEstaVisivel = false;
+    });
+    _focoDoTexto.requestFocus();
+  }
+
+  void _canceleResposta() {
+    setState(() {
+      _publicacaoSendoRespondida = null;
     });
   }
 
@@ -405,68 +477,75 @@ class _CabecalhoDosMomentos extends StatelessWidget {
 
     return Material(
       color: CoresDoAplicativo.fundoPrincipal.withValues(alpha: 0.94),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: EspacamentosDoAplicativo.pequeno,
-          vertical: EspacamentosDoAplicativo.pequeno,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: CoresDoAplicativo.bordaDiscreta),
+          ),
         ),
-        child: Row(
-          children: <Widget>[
-            IconButton(
-              tooltip: 'Voltar',
-              onPressed: aoVoltar,
-              icon: const Icon(Icons.arrow_back_ios_new_rounded),
-            ),
-            Expanded(
-              child: InkWell(
-                key: const Key('abrir-informacoes-do-encontro'),
-                borderRadius: BorderRadius.circular(
-                  RaiosDoAplicativo.pequeno,
-                ),
-                onTap: aoAbrirInformacoes,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    children: <Widget>[
-                      _MiniaturaDoEncontro(encontro: encontro),
-                      const SizedBox(width: EspacamentosDoAplicativo.medio),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              encontro.titulo,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              complemento,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: CoresDoAplicativo.textoSecundario,
-                                fontSize: 12,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: EspacamentosDoAplicativo.pequeno,
+            vertical: EspacamentosDoAplicativo.pequeno,
+          ),
+          child: Row(
+            children: <Widget>[
+              IconButton(
+                tooltip: 'Voltar',
+                onPressed: aoVoltar,
+                icon: const Icon(Icons.arrow_back_ios_new_rounded),
+              ),
+              Expanded(
+                child: InkWell(
+                  key: const Key('abrir-informacoes-do-encontro'),
+                  borderRadius: BorderRadius.circular(
+                    RaiosDoAplicativo.pequeno,
+                  ),
+                  onTap: aoAbrirInformacoes,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: <Widget>[
+                        _MiniaturaDoEncontro(encontro: encontro),
+                        const SizedBox(width: EspacamentosDoAplicativo.medio),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                encontro.titulo,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: 2),
+                              Text(
+                                complemento,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: CoresDoAplicativo.textoSecundario,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
-            IconButton(
-              tooltip: 'Informações do encontro',
-              onPressed: aoAbrirInformacoes,
-              icon: const Icon(Icons.info_outline_rounded),
-            ),
-          ],
+              IconButton(
+                tooltip: 'Informações do encontro',
+                onPressed: aoAbrirInformacoes,
+                icon: const Icon(Icons.info_outline_rounded),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -483,11 +562,12 @@ class _MiniaturaDoEncontro extends StatelessWidget {
     String url = ConfiguracaoDoAmbiente.crieUrlAbsoluta(
       encontro.urlDaImagemDeCapa,
     );
+    double dimensao = MediaQuery.sizeOf(context).width <= 360 ? 40 : 48;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(RaiosDoAplicativo.medio),
       child: SizedBox.square(
-        dimension: 48,
+        dimension: dimensao,
         child: url.isEmpty
             ? const ColoredBox(
                 color: CoresDoAplicativo.fundoDoCartaoSuave,
@@ -510,11 +590,17 @@ class _ListaDeMomentos extends StatelessWidget {
     required this.controladorDaRolagem,
     required this.publicacoes,
     required this.aoRemover,
+    required this.aoResponder,
+    required this.aoAbrirPerfil,
+    required this.respostaPorGestoEstaHabilitada,
   });
 
   final ScrollController controladorDaRolagem;
   final List<PublicacaoDoEncontro> publicacoes;
   final Future<bool> Function(PublicacaoDoEncontro publicacao) aoRemover;
+  final ValueChanged<PublicacaoDoEncontro> aoResponder;
+  final ValueChanged<PublicacaoDoEncontro> aoAbrirPerfil;
+  final bool respostaPorGestoEstaHabilitada;
 
   @override
   Widget build(BuildContext context) {
@@ -540,11 +626,11 @@ class _ListaDeMomentos extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(
         horizontal: EspacamentosDoAplicativo.padrao,
-        vertical: EspacamentosDoAplicativo.grande,
+        vertical: EspacamentosDoAplicativo.padrao,
       ),
       itemCount: publicacoes.length,
       separatorBuilder: (BuildContext context, int indice) =>
-          const SizedBox(height: EspacamentosDoAplicativo.medio),
+          const SizedBox(height: EspacamentosDoAplicativo.pequeno),
       itemBuilder: (BuildContext context, int indice) {
         PublicacaoDoEncontro publicacao = publicacoes[indice];
 
@@ -555,6 +641,9 @@ class _ListaDeMomentos extends StatelessWidget {
         return _MomentoDeParticipante(
           publicacao: publicacao,
           aoRemover: aoRemover,
+          aoResponder: aoResponder,
+          aoAbrirPerfil: aoAbrirPerfil,
+          respostaPorGestoEstaHabilitada: respostaPorGestoEstaHabilitada,
         );
       },
     );
@@ -594,17 +683,32 @@ class _MomentoDeParticipante extends StatelessWidget {
   const _MomentoDeParticipante({
     required this.publicacao,
     required this.aoRemover,
+    required this.aoResponder,
+    required this.aoAbrirPerfil,
+    required this.respostaPorGestoEstaHabilitada,
   });
 
   final PublicacaoDoEncontro publicacao;
   final Future<bool> Function(PublicacaoDoEncontro publicacao) aoRemover;
+  final ValueChanged<PublicacaoDoEncontro> aoResponder;
+  final ValueChanged<PublicacaoDoEncontro> aoAbrirPerfil;
+  final bool respostaPorGestoEstaHabilitada;
+
+  bool get _priorizeRespostaPorGesto {
+    return defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.fuchsia;
+  }
 
   @override
   Widget build(BuildContext context) {
     Widget balao = Container(
       key: Key('publicacao-${publicacao.identificador}'),
       constraints: const BoxConstraints(maxWidth: 430),
-      padding: const EdgeInsets.all(EspacamentosDoAplicativo.medio),
+      padding: const EdgeInsets.symmetric(
+        horizontal: EspacamentosDoAplicativo.medio,
+        vertical: 10,
+      ),
       decoration: BoxDecoration(
         color: publicacao.usuarioAtual
             ? CoresDoAplicativo.fundoDaMensagemAtual
@@ -619,7 +723,6 @@ class _MomentoDeParticipante extends StatelessWidget {
             publicacao.usuarioAtual ? 4 : RaiosDoAplicativo.medio,
           ),
         ),
-        border: Border.all(color: CoresDoAplicativo.bordaSuave),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -631,10 +734,12 @@ class _MomentoDeParticipante extends StatelessWidget {
                 child: Text(
                   publicacao.usuarioAtual ? 'Você' : publicacao.nomeDoAutor,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: CoresDoAplicativo.verdeDestaque,
+                  style: TextStyle(
+                    color: publicacao.usuarioAtual
+                        ? CoresDoAplicativo.textoSecundario
+                        : CoresDoAplicativo.ambar,
                     fontSize: 14,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -646,8 +751,31 @@ class _MomentoDeParticipante extends StatelessWidget {
                   fontSize: 12,
                 ),
               ),
+              if (!_priorizeRespostaPorGesto) ...<Widget>[
+                const SizedBox(width: EspacamentosDoAplicativo.minimo),
+                IconButton(
+                  key: Key(
+                    'responder-publicacao-${publicacao.identificador}',
+                  ),
+                  tooltip:
+                      'Responder à publicação de ${publicacao.nomeDoAutor}',
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  onPressed: () => aoResponder(publicacao),
+                  icon: const Icon(Icons.reply_rounded, size: 18),
+                ),
+              ],
             ],
           ),
+          if (publicacao.publicacaoRespondida != null) ...<Widget>[
+            const SizedBox(height: EspacamentosDoAplicativo.minimo),
+            _TrechoDaPublicacaoRespondida(
+              publicacaoRespondida: publicacao.publicacaoRespondida!,
+            ),
+          ],
           if (publicacao.texto != null &&
               publicacao.texto!.trim().isNotEmpty) ...<Widget>[
             const SizedBox(height: EspacamentosDoAplicativo.minimo),
@@ -660,32 +788,251 @@ class _MomentoDeParticipante extends StatelessWidget {
               aoRemover: () => aoRemover(publicacao),
             ),
           ],
-          if (publicacao.ehImagem) ...<Widget>[
-            const SizedBox(height: EspacamentosDoAplicativo.minimo),
-            const Text(
-              'Toque para ampliar',
-              style: TextStyle(
-                color: CoresDoAplicativo.textoTerciario,
-                fontSize: 12,
-              ),
-            ),
-          ],
         ],
       ),
     );
 
-    return Row(
-      mainAxisAlignment: publicacao.usuarioAtual
-          ? MainAxisAlignment.end
-          : MainAxisAlignment.start,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        if (!publicacao.usuarioAtual) ...<Widget>[
-          _AvatarDoAutor(publicacao: publicacao),
-          const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: () => aoResponder(publicacao),
+      child: Row(
+        mainAxisAlignment: publicacao.usuarioAtual
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (!publicacao.usuarioAtual) ...<Widget>[
+            _AvatarDoAutor(
+              publicacao: publicacao,
+              aoTocar: () => aoAbrirPerfil(publicacao),
+            ),
+            const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+          ],
+          Flexible(
+            child: _BalaoDeslizavelParaResposta(
+              identificadorDaPublicacao: publicacao.identificador,
+              estaHabilitado: respostaPorGestoEstaHabilitada,
+              aoResponder: () => aoResponder(publicacao),
+              filho: balao,
+            ),
+          ),
         ],
-        Flexible(child: balao),
+      ),
+    );
+  }
+}
+
+class _BalaoDeslizavelParaResposta extends StatefulWidget {
+  const _BalaoDeslizavelParaResposta({
+    required this.identificadorDaPublicacao,
+    required this.estaHabilitado,
+    required this.aoResponder,
+    required this.filho,
+  });
+
+  final String identificadorDaPublicacao;
+  final bool estaHabilitado;
+  final VoidCallback aoResponder;
+  final Widget filho;
+
+  @override
+  State<_BalaoDeslizavelParaResposta> createState() =>
+      _EstadoDoBalaoDeslizavelParaResposta();
+}
+
+class _EstadoDoBalaoDeslizavelParaResposta
+    extends State<_BalaoDeslizavelParaResposta> {
+  static const double _deslocamentoMaximo = 72;
+  static const double _limiteParaResponder = 48;
+  static const double _margemDoGestoDoSistema = 24;
+  static const Duration _duracaoDoRetorno = Duration(milliseconds: 160);
+
+  double _deslocamento = 0;
+  bool _estaArrastando = false;
+  bool _inicioDoGestoEhValido = false;
+
+  @override
+  Widget build(BuildContext context) {
+    double progresso = (_deslocamento / _limiteParaResponder).clamp(0, 1);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      alignment: Alignment.centerLeft,
+      children: <Widget>[
+        IgnorePointer(
+          child: Opacity(
+            opacity: progresso,
+            child: Transform.scale(
+              scale: 0.72 + (0.28 * progresso),
+              child: const Padding(
+                padding: EdgeInsets.only(left: 10),
+                child: Icon(
+                  Icons.reply_rounded,
+                  color: CoresDoAplicativo.verdeDestaque,
+                  size: 24,
+                ),
+              ),
+            ),
+          ),
+        ),
+        GestureDetector(
+          key: Key(
+            'deslizar-para-responder-${widget.identificadorDaPublicacao}',
+          ),
+          behavior: HitTestBehavior.translucent,
+          dragStartBehavior: DragStartBehavior.down,
+          supportedDevices: const <PointerDeviceKind>{
+            PointerDeviceKind.touch,
+            PointerDeviceKind.stylus,
+          },
+          onHorizontalDragStart: widget.estaHabilitado
+              ? (DragStartDetails detalhes) {
+                  setState(() {
+                    _inicioDoGestoEhValido =
+                        detalhes.globalPosition.dx >= _margemDoGestoDoSistema;
+                    _estaArrastando = _inicioDoGestoEhValido;
+                  });
+                }
+              : null,
+          onHorizontalDragUpdate: widget.estaHabilitado
+              ? (DragUpdateDetails detalhes) {
+                  if (!_inicioDoGestoEhValido) {
+                    return;
+                  }
+
+                  double deslocamentoAtualizado =
+                      _deslocamento + detalhes.delta.dx;
+                  setState(() {
+                    _deslocamento = deslocamentoAtualizado.clamp(
+                      0,
+                      _deslocamentoMaximo,
+                    );
+                  });
+                }
+              : null,
+          onHorizontalDragCancel:
+              widget.estaHabilitado ? _retorneParaOrigem : null,
+          onHorizontalDragEnd: widget.estaHabilitado
+              ? (_) {
+                  if (!_inicioDoGestoEhValido) {
+                    _retorneParaOrigem();
+                    return;
+                  }
+
+                  bool deveResponder = _deslocamento >= _limiteParaResponder;
+                  _retorneParaOrigem();
+
+                  if (deveResponder) {
+                    HapticFeedback.selectionClick().catchError((Object _) {});
+                    widget.aoResponder();
+                  }
+                }
+              : null,
+          child: AnimatedContainer(
+            duration: _estaArrastando || MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : _duracaoDoRetorno,
+            curve: Curves.easeOutCubic,
+            transform: Matrix4.translationValues(_deslocamento, 0, 0),
+            child: widget.filho,
+          ),
+        ),
       ],
+    );
+  }
+
+  void _retorneParaOrigem() {
+    setState(() {
+      _estaArrastando = false;
+      _inicioDoGestoEhValido = false;
+      _deslocamento = 0;
+    });
+  }
+}
+
+class _TrechoDaPublicacaoRespondida extends StatelessWidget {
+  const _TrechoDaPublicacaoRespondida({
+    required this.publicacaoRespondida,
+    this.exibaAcaoDeCancelar = false,
+    this.aoCancelar,
+  });
+
+  final PublicacaoRespondida publicacaoRespondida;
+  final bool exibaAcaoDeCancelar;
+  final VoidCallback? aoCancelar;
+
+  @override
+  Widget build(BuildContext context) {
+    String conteudo = publicacaoRespondida.foiRemovida
+        ? 'Mensagem removida'
+        : publicacaoRespondida.texto?.trim().isNotEmpty == true
+            ? publicacaoRespondida.texto!.trim()
+            : publicacaoRespondida.temMidia
+                ? 'Foto'
+                : 'Publicação';
+
+    String descricaoSemantica =
+        exibaAcaoDeCancelar ? 'Respondendo a' : 'Resposta à publicação de';
+
+    return Semantics(
+      label:
+          '$descricaoSemantica ${publicacaoRespondida.nomeDoAutor}: $conteudo',
+      child: Container(
+        key: Key(
+          'trecho-publicacao-respondida-${publicacaoRespondida.identificador}',
+        ),
+        width: double.infinity,
+        constraints: const BoxConstraints(minHeight: 54),
+        padding: const EdgeInsets.only(left: 10, top: 7, bottom: 7),
+        decoration: const BoxDecoration(
+          color: CoresDoAplicativo.fundoSecundario,
+          border: Border(
+            left: BorderSide(
+              color: CoresDoAplicativo.verdeDestaque,
+              width: 3,
+            ),
+          ),
+        ),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Text(
+                    publicacaoRespondida.nomeDoAutor,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: CoresDoAplicativo.verdeDestaque,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    conteudo,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: CoresDoAplicativo.textoSecundario,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (exibaAcaoDeCancelar)
+              IconButton(
+                key: const Key('cancelar-resposta'),
+                tooltip: 'Cancelar resposta',
+                onPressed: aoCancelar,
+                icon: const Icon(Icons.close_rounded, size: 20),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -817,9 +1164,13 @@ class _ImagemDoMomento extends StatelessWidget {
 }
 
 class _AvatarDoAutor extends StatelessWidget {
-  const _AvatarDoAutor({required this.publicacao});
+  const _AvatarDoAutor({
+    required this.publicacao,
+    required this.aoTocar,
+  });
 
   final PublicacaoDoEncontro publicacao;
+  final VoidCallback aoTocar;
 
   @override
   Widget build(BuildContext context) {
@@ -827,10 +1178,27 @@ class _AvatarDoAutor extends StatelessWidget {
         ? '?'
         : publicacao.nomeDoAutor.trim()[0].toUpperCase();
 
-    return FotoDePerfil(
-      url: publicacao.urlDaFotoDePerfilDoAutor,
-      iniciais: inicial,
-      dimensao: 36,
+    return Semantics(
+      button: true,
+      label: 'Abrir perfil de ${publicacao.nomeDoAutor}',
+      child: Tooltip(
+        message: 'Ver perfil de ${publicacao.nomeDoAutor}',
+        child: InkResponse(
+          key: Key(
+            'abrir-perfil-${publicacao.identificadorDoUsuarioAutor}',
+          ),
+          radius: 24,
+          onTap: aoTocar,
+          child: Padding(
+            padding: const EdgeInsets.all(4),
+            child: FotoDePerfil(
+              url: publicacao.urlDaFotoDePerfilDoAutor,
+              iniciais: inicial,
+              dimensao: 32,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -838,27 +1206,84 @@ class _AvatarDoAutor extends StatelessWidget {
 class _CompositorDeMomento extends StatelessWidget {
   const _CompositorDeMomento({
     required this.controladorDoTexto,
+    required this.focoDoTexto,
     required this.estaPublicando,
-    required this.imagemSelecionada,
+    required this.publicacaoSendoRespondida,
     required this.aoSelecionarImagem,
-    required this.aoRemoverImagem,
+    required this.aoCancelarResposta,
     required this.aoAlternarEmojis,
     required this.aoPublicar,
   });
 
   final TextEditingController controladorDoTexto;
+  final FocusNode focoDoTexto;
   final bool estaPublicando;
-  final ImagemSelecionada? imagemSelecionada;
+  final PublicacaoDoEncontro? publicacaoSendoRespondida;
   final VoidCallback aoSelecionarImagem;
-  final VoidCallback aoRemoverImagem;
+  final VoidCallback aoCancelarResposta;
   final VoidCallback aoAlternarEmojis;
   final VoidCallback aoPublicar;
+
+  bool get _estaEmComputador {
+    return defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux;
+  }
+
+  KeyEventResult _processeTecla(FocusNode _, KeyEvent evento) {
+    TextRange composicaoAtual = controladorDoTexto.value.composing;
+    bool temComposicaoEmAndamento =
+        composicaoAtual.isValid && !composicaoAtual.isCollapsed;
+
+    if (!_estaEmComputador ||
+        evento is! KeyDownEvent ||
+        temComposicaoEmAndamento) {
+      return KeyEventResult.ignored;
+    }
+
+    if (evento.logicalKey == LogicalKeyboardKey.escape &&
+        publicacaoSendoRespondida != null) {
+      aoCancelarResposta();
+      return KeyEventResult.handled;
+    }
+
+    if (evento.logicalKey != LogicalKeyboardKey.enter) {
+      return KeyEventResult.ignored;
+    }
+
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      _quebreLinha();
+    } else {
+      aoPublicar();
+    }
+
+    return KeyEventResult.handled;
+  }
+
+  void _quebreLinha() {
+    TextEditingValue valorAtual = controladorDoTexto.value;
+    TextSelection selecaoAtual = valorAtual.selection;
+    int inicioDaSelecao =
+        selecaoAtual.isValid ? selecaoAtual.start : valorAtual.text.length;
+    int fimDaSelecao =
+        selecaoAtual.isValid ? selecaoAtual.end : valorAtual.text.length;
+    String textoAtualizado = valorAtual.text.replaceRange(
+      inicioDaSelecao,
+      fimDaSelecao,
+      '\n',
+    );
+
+    controladorDoTexto.value = TextEditingValue(
+      text: textoAtualizado,
+      selection: TextSelection.collapsed(offset: inicioDaSelecao + 1),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: CoresDoAplicativo.fundoSecundario,
+        color: CoresDoAplicativo.fundoElevado,
         border: const Border(
           top: BorderSide(color: CoresDoAplicativo.bordaDiscreta),
         ),
@@ -877,10 +1302,19 @@ class _CompositorDeMomento extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              if (imagemSelecionada != null) ...<Widget>[
-                _PreviaDaImagemSelecionada(
-                  imagem: imagemSelecionada!,
-                  aoRemover: aoRemoverImagem,
+              if (publicacaoSendoRespondida != null) ...<Widget>[
+                _TrechoDaPublicacaoRespondida(
+                  publicacaoRespondida: PublicacaoRespondida(
+                    identificador: publicacaoSendoRespondida!.identificador,
+                    nomeDoAutor: publicacaoSendoRespondida!.usuarioAtual
+                        ? 'Você'
+                        : publicacaoSendoRespondida!.nomeDoAutor,
+                    texto: publicacaoSendoRespondida!.texto,
+                    temMidia: publicacaoSendoRespondida!.temMidia,
+                    foiRemovida: false,
+                  ),
+                  exibaAcaoDeCancelar: true,
+                  aoCancelar: aoCancelarResposta,
                 ),
                 const SizedBox(height: EspacamentosDoAplicativo.pequeno),
               ],
@@ -900,37 +1334,39 @@ class _CompositorDeMomento extends StatelessWidget {
                     icon: const Icon(Icons.sentiment_satisfied_alt_rounded),
                   ),
                   Expanded(
-                    child: TextField(
-                      key: const Key('texto-da-nova-publicacao'),
-                      controller: controladorDoTexto,
-                      enabled: !estaPublicando,
-                      minLines: 1,
-                      maxLines: 4,
-                      maxLength: imagemSelecionada == null ? 1000 : 280,
-                      buildCounter: (
-                        BuildContext context, {
-                        required int currentLength,
-                        required bool isFocused,
-                        required int? maxLength,
-                      }) {
-                        return null;
-                      },
-                      textInputAction: TextInputAction.newline,
-                      decoration: InputDecoration(
-                        hintText: imagemSelecionada == null
-                            ? 'Compartilhe algo com o encontro'
-                            : 'Adicione uma legenda',
-                        filled: true,
-                        fillColor: CoresDoAplicativo.fundoDoCartao,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 11,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            RaiosDoAplicativo.pilula,
+                    child: Focus(
+                      onKeyEvent: _processeTecla,
+                      child: TextField(
+                        key: const Key('texto-da-nova-publicacao'),
+                        controller: controladorDoTexto,
+                        focusNode: focoDoTexto,
+                        enabled: !estaPublicando,
+                        minLines: 1,
+                        maxLines: 4,
+                        maxLength: 1000,
+                        buildCounter: (
+                          BuildContext context, {
+                          required int currentLength,
+                          required bool isFocused,
+                          required int? maxLength,
+                        }) {
+                          return null;
+                        },
+                        textInputAction: TextInputAction.newline,
+                        decoration: InputDecoration(
+                          hintText: 'Compartilhe algo com o encontro',
+                          filled: true,
+                          fillColor: CoresDoAplicativo.fundoDoCartaoSuave,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 11,
                           ),
-                          borderSide: BorderSide.none,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(
+                              RaiosDoAplicativo.pilula,
+                            ),
+                            borderSide: BorderSide.none,
+                          ),
                         ),
                       ),
                     ),
@@ -957,44 +1393,243 @@ class _CompositorDeMomento extends StatelessWidget {
   }
 }
 
-class _PreviaDaImagemSelecionada extends StatelessWidget {
-  const _PreviaDaImagemSelecionada({
-    required this.imagem,
-    required this.aoRemover,
+class _DialogoDeNovaPublicacao extends StatefulWidget {
+  const _DialogoDeNovaPublicacao({
+    required this.midias,
+    required this.legendaInicial,
+    required this.aoPublicar,
   });
 
-  final ImagemSelecionada imagem;
-  final VoidCallback aoRemover;
+  final List<MidiaSelecionada> midias;
+  final String legendaInicial;
+  final Future<bool> Function(String legenda) aoPublicar;
+
+  @override
+  State<_DialogoDeNovaPublicacao> createState() =>
+      _EstadoDoDialogoDeNovaPublicacao();
+}
+
+class _EstadoDoDialogoDeNovaPublicacao extends State<_DialogoDeNovaPublicacao> {
+  late final TextEditingController _controladorDaLegenda;
+  final PageController _controladorDasMidias = PageController();
+  int _indiceDaMidia = 0;
+  bool _estaPublicando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controladorDaLegenda = TextEditingController(text: widget.legendaInicial);
+  }
+
+  @override
+  void dispose() {
+    _controladorDaLegenda.dispose();
+    _controladorDasMidias.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Stack(
-        clipBehavior: Clip.none,
+    bool telaPequena = MediaQuery.sizeOf(context).width < 600;
+    Widget conteudo = Material(
+      color: CoresDoAplicativo.fundoPrincipal,
+      child: SafeArea(
+        child: Column(
+          children: <Widget>[
+            _CabecalhoDaNovaPublicacao(
+              estaPublicando: _estaPublicando,
+              aoCancelar: () => Navigator.of(context).pop(false),
+              aoPublicar: _publiqueAsync,
+            ),
+            Expanded(
+              child: _PreviaDasMidiasSelecionadas(
+                midias: widget.midias,
+                controlador: _controladorDasMidias,
+                indiceAtual: _indiceDaMidia,
+                aoMudar: (int indice) {
+                  setState(() {
+                    _indiceDaMidia = indice;
+                  });
+                },
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(EspacamentosDoAplicativo.padrao),
+              child: TextField(
+                key: const Key('legenda-da-publicacao'),
+                controller: _controladorDaLegenda,
+                enabled: !_estaPublicando,
+                minLines: 2,
+                maxLines: 5,
+                maxLength: 280,
+                decoration: const InputDecoration(
+                  hintText: 'Escreva uma legenda...',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (telaPequena) {
+      return Dialog.fullscreen(child: conteudo);
+    }
+
+    return Dialog(
+      child: SizedBox(
+        width: 560,
+        height: 700,
+        child: conteudo,
+      ),
+    );
+  }
+
+  Future<void> _publiqueAsync() async {
+    if (_estaPublicando || _controladorDaLegenda.text.trim().length > 280) {
+      return;
+    }
+
+    setState(() {
+      _estaPublicando = true;
+    });
+    bool publicou = await widget.aoPublicar(_controladorDaLegenda.text);
+
+    if (!mounted) {
+      return;
+    }
+
+    if (publicou) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+
+    setState(() {
+      _estaPublicando = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Não foi possível publicar as mídias.')),
+    );
+  }
+}
+
+class _CabecalhoDaNovaPublicacao extends StatelessWidget {
+  const _CabecalhoDaNovaPublicacao({
+    required this.estaPublicando,
+    required this.aoCancelar,
+    required this.aoPublicar,
+  });
+
+  final bool estaPublicando;
+  final VoidCallback aoCancelar;
+  final VoidCallback aoPublicar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: EspacamentosDoAplicativo.pequeno,
+        vertical: EspacamentosDoAplicativo.minimo,
+      ),
+      child: Row(
         children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.memory(
-              imagem.conteudo,
-              key: const Key('previa-da-foto'),
-              width: 96,
-              height: 96,
-              fit: BoxFit.cover,
+          IconButton(
+            key: const Key('cancelar-nova-publicacao'),
+            tooltip: 'Cancelar',
+            onPressed: estaPublicando ? null : aoCancelar,
+            icon: const Icon(Icons.close_rounded),
+          ),
+          const Expanded(
+            child: Text(
+              'Nova publicação',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
           ),
-          Positioned(
-            top: -8,
-            right: -8,
-            child: IconButton.filledTonal(
-              key: const Key('remover-foto-selecionada'),
-              tooltip: 'Remover foto',
-              onPressed: aoRemover,
-              icon: const Icon(Icons.close_rounded, size: 18),
-            ),
+          TextButton(
+            key: const Key('confirmar-nova-publicacao'),
+            onPressed: estaPublicando ? null : aoPublicar,
+            child: estaPublicando
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Publicar'),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PreviaDasMidiasSelecionadas extends StatelessWidget {
+  const _PreviaDasMidiasSelecionadas({
+    required this.midias,
+    required this.controlador,
+    required this.indiceAtual,
+    required this.aoMudar,
+  });
+
+  final List<MidiaSelecionada> midias;
+  final PageController controlador;
+  final int indiceAtual;
+  final ValueChanged<int> aoMudar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        PageView.builder(
+          key: const Key('previa-das-midias'),
+          controller: controlador,
+          itemCount: midias.length,
+          onPageChanged: aoMudar,
+          itemBuilder: (BuildContext context, int indice) {
+            MidiaSelecionada midia = midias[indice];
+
+            if (midia.ehVideo) {
+              return VideoComBytes(
+                bytes: midia.conteudo,
+                tipoDeConteudo: midia.tipoDeConteudo,
+                exibaControles: true,
+              );
+            }
+
+            return Image.memory(
+              midia.conteudo,
+              key: Key('previa-da-midia-$indice'),
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const Center(
+                child: Icon(Icons.broken_image_outlined, size: 52),
+              ),
+            );
+          },
+        ),
+        if (midias.length > 1)
+          Positioned(
+            top: EspacamentosDoAplicativo.pequeno,
+            right: EspacamentosDoAplicativo.pequeno,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(
+                  RaiosDoAplicativo.pilula,
+                ),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: EspacamentosDoAplicativo.pequeno,
+                  vertical: EspacamentosDoAplicativo.minimo,
+                ),
+                child: Text(
+                  '${indiceAtual + 1}/${midias.length}',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

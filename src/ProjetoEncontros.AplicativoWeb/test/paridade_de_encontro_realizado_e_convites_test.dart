@@ -6,6 +6,7 @@ import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/estad
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/encontro_criado.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/encontro_detalhado.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/participante_do_encontro.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/preferencias_do_aniversario.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/inicio/dados/repositorio_da_pagina_inicial.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/inicio/estado/controlador_da_pagina_inicial.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/inicio/modelos/convite_do_encontro_resumo.dart';
@@ -135,6 +136,13 @@ class _RepositorioDeEncontrosFalso
       throw UnimplementedError();
 
   @override
+  Future<void> alterePreferenciasDoAniversarioAsync({
+    required String identificador,
+    required PreferenciasDoAniversario preferencias,
+  }) =>
+      throw UnimplementedError();
+
+  @override
   Future<void> convidePessoaAsync({
     required String identificador,
     required String email,
@@ -149,6 +157,14 @@ class _RepositorioDeEncontrosFalso
       throw UnimplementedError();
 
   @override
+  Future<void> alterePapelDoParticipanteAsync({
+    required String identificador,
+    required String identificadorDoUsuario,
+    required String papel,
+  }) =>
+      throw UnimplementedError();
+
+  @override
   Future<EncontroCriado> crieEncontroAsync({
     required String titulo,
     required DateTime inicioEm,
@@ -157,6 +173,7 @@ class _RepositorioDeEncontrosFalso
     double? latitude,
     double? longitude,
     String? tipo,
+    PreferenciasDoAniversario? preferenciasDoAniversario,
   }) =>
       throw UnimplementedError();
 

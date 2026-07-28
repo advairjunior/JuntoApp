@@ -48,8 +48,19 @@ public interface IRepositorioDeEncontros
         Guid identificadorDoUsuario,
         CancellationToken cancellationToken);
 
+    Task AvanceVisualizacaoAteAsync(
+        Guid identificadorDoEncontro,
+        Guid identificadorDoUsuario,
+        DateTimeOffset visualizadoAteEm,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyCollection<ParticipanteDoEncontro>> ListeParticipantesDosEncontrosAsync(
         IReadOnlyCollection<Guid> identificadoresDosEncontros,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyDictionary<Guid, int>> ObtenhaQuantidadesDeNovidadesAsync(
+        IReadOnlyCollection<Guid> identificadoresDosEncontros,
+        Guid identificadorDoUsuario,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyCollection<PresencaNoEncontro>> ListePresencasDoEncontroAsync(
@@ -64,6 +75,10 @@ public interface IRepositorioDeEncontros
 
     Task<PublicacaoDoEncontro?> ObtenhaPublicacaoAsync(
         Guid identificadorDaPublicacao,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyCollection<PublicacaoDoEncontro>> ObtenhaPublicacoesAsync(
+        IReadOnlyCollection<Guid> identificadoresDasPublicacoes,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyCollection<PublicacaoDoEncontro>> ListePublicacoesDoEncontroAsync(

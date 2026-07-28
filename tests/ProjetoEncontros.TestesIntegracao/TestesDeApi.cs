@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
+using ProjetoEncontros.Dominio.Encontros;
 using ProjetoEncontros.Infraestrutura.Dados;
 
 namespace ProjetoEncontros.TestesIntegracao;
@@ -22,6 +23,110 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
     };
     private static readonly byte[] ConteudoPngValido = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+
+    [Fact]
+    public async Task Aniversario_DevePreservarPreferenciasEControlarVisualizacaoEEdicao()
+    {
+        await fabricaDaApi.ReinicieBancoAsync();
+        HttpClient clienteDoOrganizador = fabricaDaApi.CrieCliente();
+        HttpClient clienteDoConvidado = fabricaDaApi.CrieCliente();
+
+        await CadastreUsuarioAsync(
+            clienteDoOrganizador,
+            "Organizador",
+            "organizador.aniversario@email.com",
+            "senha-segura");
+        await CadastreUsuarioAsync(
+            clienteDoConvidado,
+            "Convidado",
+            "convidado.aniversario@email.com",
+            "senha-segura");
+        RespostaDeLogin loginDoOrganizador = await AutentiqueUsuarioAsync(
+            clienteDoOrganizador,
+            "organizador.aniversario@email.com",
+            "senha-segura");
+        RespostaDeLogin loginDoConvidado = await AutentiqueUsuarioAsync(
+            clienteDoConvidado,
+            "convidado.aniversario@email.com",
+            "senha-segura");
+        clienteDoOrganizador.DefaultRequestHeaders.Authorization =
+            new("Bearer", loginDoOrganizador.TokenDeAcesso);
+        clienteDoConvidado.DefaultRequestHeaders.Authorization =
+            new("Bearer", loginDoConvidado.TokenDeAcesso);
+
+        RequisicaoDePreferenciasDoAniversario preferencias = new(
+            "42",
+            "M",
+            "40",
+            "Livros e jogos",
+            "Camisa do Brasil");
+        HttpResponseMessage respostaDeCriacao = await clienteDoOrganizador.PostAsJsonAsync(
+            "/api/encontros",
+            new RequisicaoDeCriacaoDeEncontro(
+                "Aniversário da Ana",
+                null,
+                null,
+                DateTimeOffset.UtcNow.AddDays(10),
+                Encontro.TipoAniversario,
+                PreferenciasDoAniversario: preferencias));
+        await GarantaStatusAsync(respostaDeCriacao, HttpStatusCode.Created);
+        RespostaDeEncontroCriado encontro = await LeiaJsonAsync<RespostaDeEncontroCriado>(
+            respostaDeCriacao);
+
+        Assert.Equal("42", encontro.PreferenciasDoAniversario?.NumeroDoCalcado);
+
+        await ConvideParaEncontroDiretoAsync(
+            clienteDoOrganizador,
+            encontro.Identificador,
+            "convidado.aniversario@email.com");
+
+        HttpResponseMessage respostaAntesDaConfirmacao = await clienteDoConvidado.GetAsync(
+            $"/api/encontros/{encontro.Identificador}");
+        await GarantaStatusAsync(respostaAntesDaConfirmacao, HttpStatusCode.OK);
+        RespostaDeEncontroDetalhado detalheAntesDaConfirmacao =
+            await LeiaJsonAsync<RespostaDeEncontroDetalhado>(respostaAntesDaConfirmacao);
+        Assert.Null(detalheAntesDaConfirmacao.PreferenciasDoAniversario);
+
+        await ConfirmePresencaDiretaAsync(clienteDoConvidado, encontro.Identificador);
+
+        HttpResponseMessage respostaDepoisDaConfirmacao = await clienteDoConvidado.GetAsync(
+            $"/api/encontros/{encontro.Identificador}");
+        await GarantaStatusAsync(respostaDepoisDaConfirmacao, HttpStatusCode.OK);
+        RespostaDeEncontroDetalhado detalheDepoisDaConfirmacao =
+            await LeiaJsonAsync<RespostaDeEncontroDetalhado>(respostaDepoisDaConfirmacao);
+        Assert.Equal(
+            "Livros e jogos",
+            detalheDepoisDaConfirmacao.PreferenciasDoAniversario?.SugestoesDePresente);
+
+        HttpResponseMessage respostaDeEdicaoPeloConvidado =
+            await clienteDoConvidado.PutAsJsonAsync(
+                $"/api/encontros/{encontro.Identificador}/preferencias-do-aniversario",
+                new RequisicaoDePreferenciasDoAniversario(
+                    "41",
+                    null,
+                    null,
+                    null,
+                    null));
+        await GarantaStatusAsync(respostaDeEdicaoPeloConvidado, HttpStatusCode.Forbidden);
+
+        HttpResponseMessage respostaDeEdicaoPeloOrganizador =
+            await clienteDoOrganizador.PutAsJsonAsync(
+                $"/api/encontros/{encontro.Identificador}/preferencias-do-aniversario",
+                new RequisicaoDePreferenciasDoAniversario(
+                    "43",
+                    "G",
+                    null,
+                    null,
+                    null));
+        await GarantaStatusAsync(respostaDeEdicaoPeloOrganizador, HttpStatusCode.NoContent);
+
+        HttpResponseMessage respostaAtualizada = await clienteDoOrganizador.GetAsync(
+            $"/api/encontros/{encontro.Identificador}");
+        RespostaDeEncontroDetalhado detalheAtualizado =
+            await LeiaJsonAsync<RespostaDeEncontroDetalhado>(respostaAtualizada);
+        Assert.Equal("43", detalheAtualizado.PreferenciasDoAniversario?.NumeroDoCalcado);
+        Assert.Equal("G", detalheAtualizado.PreferenciasDoAniversario?.TamanhoDaCamiseta);
+    }
 
     [Fact]
     public async Task EndpointPrivado_DeveRetornarNaoAutorizadoSemJwt()
@@ -309,7 +414,10 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         using MultipartFormDataContent corpoDaMemoria = new();
         ByteArrayContent conteudoDaFoto = new(ConteudoPngValido);
         conteudoDaFoto.Headers.ContentType = new("image/png");
-        corpoDaMemoria.Add(conteudoDaFoto, "arquivo", "memoria.png");
+        ByteArrayContent conteudoDaSegundaFoto = new(ConteudoPngValido);
+        conteudoDaSegundaFoto.Headers.ContentType = new("image/png");
+        corpoDaMemoria.Add(conteudoDaFoto, "arquivos", "memoria.png");
+        corpoDaMemoria.Add(conteudoDaSegundaFoto, "arquivos", "memoria-2.png");
         corpoDaMemoria.Add(new StringContent("Mesa pronta para a resenha"), "legenda");
         HttpResponseMessage respostaDeMemoria = await cliente.PostAsync(
             $"/api/encontros/{encontroCriado.Identificador}/memorias",
@@ -321,7 +429,9 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         Assert.Equal("Deborah", memoriaCriada.NomeDoAutor);
         Assert.Equal("Mesa pronta para a resenha", memoriaCriada.Legenda);
         Assert.True(memoriaCriada.UsuarioAtual);
-        RespostaDeMidiaDaMemoria midiaCriada = Assert.Single(memoriaCriada.Midias);
+        Assert.Equal(2, memoriaCriada.Midias.Count);
+        RespostaDeMidiaDaMemoria midiaCriada = memoriaCriada.Midias.First();
+        RespostaDeMidiaDaMemoria segundaMidiaCriada = memoriaCriada.Midias.Last();
         Assert.Equal(
             $"/api/encontros/{encontroCriado.Identificador}/memorias/{memoriaCriada.Identificador}/midias/{midiaCriada.Identificador}/conteudo",
             midiaCriada.Url);
@@ -330,6 +440,8 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         HttpResponseMessage respostaDoConteudoDaMemoria = await cliente.GetAsync(midiaCriada.Url);
         await GarantaStatusAsync(respostaDoConteudoDaMemoria, HttpStatusCode.OK);
         Assert.Equal(ConteudoPngValido, await respostaDoConteudoDaMemoria.Content.ReadAsByteArrayAsync());
+        HttpResponseMessage respostaDoConteudoDaSegundaMidia = await cliente.GetAsync(segundaMidiaCriada.Url);
+        await GarantaStatusAsync(respostaDoConteudoDaSegundaMidia, HttpStatusCode.OK);
 
         HttpClient clienteSemAutenticacao = fabricaDaApi.CrieCliente();
         HttpResponseMessage respostaDaMemoriaSemAutenticacao = await clienteSemAutenticacao.GetAsync(midiaCriada.Url);
@@ -353,7 +465,7 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         List<RespostaDeMemoriaDoEncontro> memorias = await LeiaJsonAsync<List<RespostaDeMemoriaDoEncontro>>(respostaDeListagem);
         RespostaDeMemoriaDoEncontro memoriaListada = Assert.Single(memorias);
         Assert.Equal(memoriaCriada.Identificador, memoriaListada.Identificador);
-        Assert.Single(memoriaListada.Midias);
+        Assert.Equal(2, memoriaListada.Midias.Count);
 
         HttpResponseMessage respostaDeRealizadosComMemoria = await cliente.GetAsync("/api/encontros/realizados");
         await GarantaStatusAsync(respostaDeRealizadosComMemoria, HttpStatusCode.OK);
@@ -366,6 +478,8 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
 
         HttpResponseMessage respostaDaMidiaRemovida = await cliente.GetAsync(midiaCriada.Url);
         await GarantaStatusAsync(respostaDaMidiaRemovida, HttpStatusCode.Forbidden);
+        HttpResponseMessage respostaDaSegundaMidiaRemovida = await cliente.GetAsync(segundaMidiaCriada.Url);
+        await GarantaStatusAsync(respostaDaSegundaMidiaRemovida, HttpStatusCode.Forbidden);
 
         HttpResponseMessage respostaDeListagemAposRemocao = await cliente.GetAsync(
             $"/api/encontros/{encontroCriado.Identificador}/memorias");
@@ -1199,9 +1313,13 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         RespostaDePresencaDoUsuarioNoEncontro presencaTalvez = await LeiaJsonAsync<RespostaDePresencaDoUsuarioNoEncontro>(respostaDeTalvez);
         Assert.Equal("Talvez", presencaTalvez.Situacao);
 
-        HttpResponseMessage respostaDeNaoVai = await clienteConvidado.PutAsJsonAsync(
+        HttpResponseMessage respostaDeTalvezRepetida = await clienteConvidado.PutAsJsonAsync(
             $"/api/encontros/{encontroCriado.Identificador}/presenca",
-            new RequisicaoDeRespostaDePresenca("NaoVai"));
+            new RequisicaoDeRespostaDePresenca("Talvez"));
+        await GarantaStatusAsync(respostaDeTalvezRepetida, HttpStatusCode.OK);
+
+        HttpResponseMessage respostaDeNaoVai = await clienteConvidado.DeleteAsync(
+            $"/api/encontros/{encontroCriado.Identificador}/presenca");
         await GarantaStatusAsync(respostaDeNaoVai, HttpStatusCode.OK);
 
         RespostaDePresencaDoUsuarioNoEncontro presencaNaoVai = await LeiaJsonAsync<RespostaDePresencaDoUsuarioNoEncontro>(respostaDeNaoVai);
@@ -1253,7 +1371,25 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         await GarantaStatusAsync(respostaDePublicacoes, HttpStatusCode.OK);
 
         List<RespostaDePublicacaoDoEncontro> publicacoes = await LeiaJsonAsync<List<RespostaDePublicacaoDoEncontro>>(respostaDePublicacoes);
-        RespostaDePublicacaoDoEncontro publicacao = Assert.Single(publicacoes);
+        Assert.Equal(4, publicacoes.Count);
+        Assert.Contains(
+            publicacoes,
+            publicacaoAtual =>
+                publicacaoAtual.EhAtualizacaoDoSistema &&
+                publicacaoAtual.Texto == "Bruno Convidado informou que talvez participe do encontro.");
+        Assert.Contains(
+            publicacoes,
+            publicacaoAtual =>
+                publicacaoAtual.EhAtualizacaoDoSistema &&
+                publicacaoAtual.Texto == "Bruno Convidado informou que não participará do encontro.");
+        Assert.Contains(
+            publicacoes,
+            publicacaoAtual =>
+                publicacaoAtual.EhAtualizacaoDoSistema &&
+                publicacaoAtual.Texto == "Bruno Convidado confirmou presença no encontro.");
+        RespostaDePublicacaoDoEncontro publicacao = Assert.Single(
+            publicacoes,
+            publicacaoAtual => !publicacaoAtual.EhAtualizacaoDoSistema);
         Assert.Equal(publicacaoCriada.Identificador, publicacao.Identificador);
 
         HttpResponseMessage respostaDePublicacoesDoUsuarioExterno = await clienteOutroUsuario.GetAsync(
@@ -1495,6 +1631,101 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         Assert.Single(publicacoes, item => !item.EhAtualizacaoDoSistema);
         Assert.Single(publicacoes, item => item.EhAtualizacaoDoSistema);
         Assert.Single(combinados);
+    }
+
+    [Fact]
+    public async Task RespostaDePublicacao_DeveValidarIdempotenciaEManterResumoAposRemocao()
+    {
+        await fabricaDaApi.ReinicieBancoAsync();
+        HttpClient cliente = fabricaDaApi.CrieCliente();
+        await CadastreUsuarioAsync(
+            cliente,
+            "Autora da conversa",
+            "autora.resposta@email.com",
+            "senha-segura");
+        RespostaDeLogin login = await AutentiqueUsuarioAsync(
+            cliente,
+            "autora.resposta@email.com",
+            "senha-segura");
+        cliente.DefaultRequestHeaders.Authorization = new("Bearer", login.TokenDeAcesso);
+        RespostaDeEncontroCriado encontro = await CrieEncontroDiretoAsync(
+            cliente,
+            "Conversa do encontro",
+            null,
+            null,
+            new(2027, 12, 10, 19, 0, 0, TimeSpan.FromHours(-3)));
+
+        HttpResponseMessage respostaDaOriginal = await cliente.PostAsJsonAsync(
+            $"/api/encontros/{encontro.Identificador}/publicacoes",
+            new RequisicaoDeCriacaoDePublicacao("Mensagem original."));
+        HttpResponseMessage respostaDaSegundaOriginal = await cliente.PostAsJsonAsync(
+            $"/api/encontros/{encontro.Identificador}/publicacoes",
+            new RequisicaoDeCriacaoDePublicacao("Outra mensagem."));
+        await GarantaStatusAsync(respostaDaOriginal, HttpStatusCode.Created);
+        await GarantaStatusAsync(respostaDaSegundaOriginal, HttpStatusCode.Created);
+        RespostaDePublicacaoDoEncontro original =
+            await LeiaJsonAsync<RespostaDePublicacaoDoEncontro>(respostaDaOriginal);
+        RespostaDePublicacaoDoEncontro segundaOriginal =
+            await LeiaJsonAsync<RespostaDePublicacaoDoEncontro>(respostaDaSegundaOriginal);
+        Guid identificadorDaOperacao = Guid.NewGuid();
+        RequisicaoDeCriacaoDePublicacao requisicaoDaResposta = new(
+            "Resposta vinculada.",
+            original.Identificador);
+
+        HttpResponseMessage respostaDaCriacao = await EnvieOperacaoAsync(
+            cliente,
+            $"/api/encontros/{encontro.Identificador}/publicacoes",
+            requisicaoDaResposta,
+            identificadorDaOperacao);
+        HttpResponseMessage respostaDaRepeticao = await EnvieOperacaoAsync(
+            cliente,
+            $"/api/encontros/{encontro.Identificador}/publicacoes",
+            requisicaoDaResposta,
+            identificadorDaOperacao);
+        await GarantaStatusAsync(respostaDaCriacao, HttpStatusCode.Created);
+        await GarantaStatusAsync(respostaDaRepeticao, HttpStatusCode.Created);
+        RespostaDePublicacaoDoEncontro publicacaoCriada =
+            await LeiaJsonAsync<RespostaDePublicacaoDoEncontro>(respostaDaCriacao);
+        RespostaDePublicacaoDoEncontro publicacaoRepetida =
+            await LeiaJsonAsync<RespostaDePublicacaoDoEncontro>(respostaDaRepeticao);
+        Assert.Equal(publicacaoCriada.Identificador, publicacaoRepetida.Identificador);
+        Assert.Equal(original.Identificador, publicacaoCriada.PublicacaoRespondida?.Identificador);
+        Assert.Equal("Autora da conversa", publicacaoCriada.PublicacaoRespondida?.NomeDoAutor);
+        Assert.Equal("Mensagem original.", publicacaoCriada.PublicacaoRespondida?.Texto);
+        Assert.False(publicacaoCriada.PublicacaoRespondida?.TemMidia);
+        Assert.False(publicacaoCriada.PublicacaoRespondida?.FoiRemovida);
+
+        HttpResponseMessage respostaDoConflitoDeIdempotencia = await EnvieOperacaoAsync(
+            cliente,
+            $"/api/encontros/{encontro.Identificador}/publicacoes",
+            requisicaoDaResposta with
+            {
+                IdentificadorDaPublicacaoRespondida = segundaOriginal.Identificador
+            },
+            identificadorDaOperacao);
+        await GarantaStatusAsync(respostaDoConflitoDeIdempotencia, HttpStatusCode.BadRequest);
+
+        using (IServiceScope escopo = fabricaDaApi.Services.CreateScope())
+        {
+            ContextoDeBanco contexto = escopo.ServiceProvider.GetRequiredService<ContextoDeBanco>();
+            PublicacaoDoEncontro publicacaoOriginal = await contexto.PublicacoesDoEncontro.SingleAsync(
+                publicacao => publicacao.Identificador == original.Identificador);
+            publicacaoOriginal.Remova(DateTimeOffset.UtcNow);
+            await contexto.SaveChangesAsync();
+        }
+
+        HttpResponseMessage respostaDaListagem = await cliente.GetAsync(
+            $"/api/encontros/{encontro.Identificador}/publicacoes");
+        await GarantaStatusAsync(respostaDaListagem, HttpStatusCode.OK);
+        List<RespostaDePublicacaoDoEncontro> publicacoes =
+            await LeiaJsonAsync<List<RespostaDePublicacaoDoEncontro>>(respostaDaListagem);
+        RespostaDePublicacaoDoEncontro respostaMantida = Assert.Single(
+            publicacoes,
+            publicacao => publicacao.Identificador == publicacaoCriada.Identificador);
+        Assert.DoesNotContain(publicacoes, publicacao => publicacao.Identificador == original.Identificador);
+        Assert.True(respostaMantida.PublicacaoRespondida?.FoiRemovida);
+        Assert.Null(respostaMantida.PublicacaoRespondida?.Texto);
+        Assert.False(respostaMantida.PublicacaoRespondida?.TemMidia);
     }
 
     [Fact]
@@ -2299,7 +2530,15 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         string? Local,
         DateTimeOffset InicioEm,
         string? Tipo = null,
-        RequisicaoDeLocalizacaoDoEncontro? Localizacao = null);
+        RequisicaoDeLocalizacaoDoEncontro? Localizacao = null,
+        RequisicaoDePreferenciasDoAniversario? PreferenciasDoAniversario = null);
+
+    private sealed record RequisicaoDePreferenciasDoAniversario(
+        string? NumeroDoCalcado,
+        string? TamanhoDaCamiseta,
+        string? TamanhoDaCalca,
+        string? SugestoesDePresente,
+        string? CoisasQueGostariaDeGanhar);
 
     private sealed record RequisicaoDeEdicaoDeEncontro(
         string Titulo,
@@ -2316,7 +2555,9 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
 
     private sealed record RequisicaoDeRespostaDePresenca(string Situacao);
 
-    private sealed record RequisicaoDeCriacaoDePublicacao(string Texto);
+    private sealed record RequisicaoDeCriacaoDePublicacao(
+        string Texto,
+        Guid? IdentificadorDaPublicacaoRespondida = null);
 
     private sealed record RequisicaoDeCriacaoDeItemDoEncontro(
         string Descricao,
@@ -2337,7 +2578,8 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         DateTimeOffset InicioEm,
         string Situacao,
         string? Tipo = null,
-        RespostaDeLocalizacaoDoEncontro? Localizacao = null);
+        RespostaDeLocalizacaoDoEncontro? Localizacao = null,
+        RespostaDePreferenciasDoAniversario? PreferenciasDoAniversario = null);
 
     private sealed record RespostaDeEncontroResumo(
         Guid Identificador,
@@ -2375,12 +2617,20 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         IReadOnlyCollection<RespostaDeParticipanteDoEncontro> Participantes,
         IReadOnlyCollection<RespostaDePresencaNoEncontro> PresencasConfirmadas,
         string? Tipo = null,
-        RespostaDeLocalizacaoDoEncontro? Localizacao = null);
+        RespostaDeLocalizacaoDoEncontro? Localizacao = null,
+        RespostaDePreferenciasDoAniversario? PreferenciasDoAniversario = null);
 
     private sealed record RespostaDeLocalizacaoDoEncontro(
         string Descricao,
         double? Latitude,
         double? Longitude);
+
+    private sealed record RespostaDePreferenciasDoAniversario(
+        string? NumeroDoCalcado,
+        string? TamanhoDaCamiseta,
+        string? TamanhoDaCalca,
+        string? SugestoesDePresente,
+        string? CoisasQueGostariaDeGanhar);
 
     private sealed record RespostaDeParticipanteDoEncontro(
         Guid IdentificadorDoUsuario,
@@ -2409,7 +2659,15 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         string? UrlDaMidia,
         string? TipoDeConteudoDaMidia,
         DateTimeOffset PublicadoEm,
-        bool EhAtualizacaoDoSistema);
+        bool EhAtualizacaoDoSistema,
+        RespostaDePublicacaoRespondida? PublicacaoRespondida = null);
+
+    private sealed record RespostaDePublicacaoRespondida(
+        Guid Identificador,
+        string NomeDoAutor,
+        string? Texto,
+        bool TemMidia,
+        bool FoiRemovida);
 
     private sealed record RespostaDeMemoriaDoEncontro(
         Guid Identificador,

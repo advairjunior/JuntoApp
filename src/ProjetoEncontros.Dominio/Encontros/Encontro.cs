@@ -4,6 +4,7 @@ namespace ProjetoEncontros.Dominio.Encontros;
 
 public sealed class Encontro : Entidade
 {
+    public const string TipoAniversario = "Aniversário";
     public const int TamanhoMaximoDoTitulo = 120;
     public const int TamanhoMaximoDoLocal = 200;
     public const int TamanhoMaximoDaDescricao = 500;
@@ -26,7 +27,8 @@ public sealed class Encontro : Entidade
         Guid identificadorDoUsuarioQueCriou,
         DateTimeOffset criadoEm,
         double? latitude,
-        double? longitude)
+        double? longitude,
+        PreferenciasDoAniversario? preferenciasDoAniversario)
         : base(identificador, criadoEm)
     {
         if (identificadorDoGrupo.HasValue && identificadorDoGrupo.Value == Guid.Empty)
@@ -46,6 +48,7 @@ public sealed class Encontro : Entidade
         Descricao = NormalizeTextoOpcional(descricao, TamanhoMaximoDaDescricao, "A descricao do encontro não pode ultrapassar 500 caracteres.");
         Localizacao = LocalizacaoDoEncontro.Crie(local, latitude, longitude);
         Tipo = NormalizeTextoOpcional(tipo, TamanhoMaximoDoTipo, "O tipo do encontro não pode ultrapassar 40 caracteres.");
+        PreferenciasDoAniversario = ValidePreferenciasDoAniversario(Tipo, preferenciasDoAniversario);
         InicioEm = inicioEm;
         IdentificadorDoUsuarioQueCriou = identificadorDoUsuarioQueCriou;
         Situacao = SituacaoDoEncontro.Planejado;
@@ -69,6 +72,8 @@ public sealed class Encontro : Entidade
     }
 
     public string? Tipo { get; private set; }
+
+    public PreferenciasDoAniversario? PreferenciasDoAniversario { get; private set; }
 
     public string? UrlDaImagemDeCapa { get; private set; }
 
@@ -117,7 +122,8 @@ public sealed class Encontro : Entidade
         DateTimeOffset criadoEm,
         string? tipo = null,
         double? latitude = null,
-        double? longitude = null)
+        double? longitude = null,
+        PreferenciasDoAniversario? preferenciasDoAniversario = null)
     {
         return new(
             identificador,
@@ -130,7 +136,8 @@ public sealed class Encontro : Entidade
             identificadorDoUsuarioQueCriou,
             criadoEm,
             latitude,
-            longitude);
+            longitude,
+            preferenciasDoAniversario);
     }
 
     public static Encontro CrieSemGrupo(
@@ -143,7 +150,8 @@ public sealed class Encontro : Entidade
         DateTimeOffset criadoEm,
         string? tipo = null,
         double? latitude = null,
-        double? longitude = null)
+        double? longitude = null,
+        PreferenciasDoAniversario? preferenciasDoAniversario = null)
     {
         return new(
             identificador,
@@ -156,7 +164,8 @@ public sealed class Encontro : Entidade
             identificadorDoUsuarioQueCriou,
             criadoEm,
             latitude,
-            longitude);
+            longitude,
+            preferenciasDoAniversario);
     }
 
     public void AltereDados(
@@ -176,7 +185,29 @@ public sealed class Encontro : Entidade
         Descricao = NormalizeTextoOpcional(descricao, TamanhoMaximoDaDescricao, "A descricao do encontro não pode ultrapassar 500 caracteres.");
         Localizacao = LocalizacaoDoEncontro.Crie(local, latitude, longitude);
         Tipo = NormalizeTextoOpcional(tipo, TamanhoMaximoDoTipo, "O tipo do encontro não pode ultrapassar 40 caracteres.");
+
+        if (!TipoEhAniversario(Tipo))
+        {
+            PreferenciasDoAniversario = null;
+        }
+
         InicioEm = inicioEm;
+        AtualizadoEm = atualizadoEm;
+    }
+
+    public void AlterePreferenciasDoAniversario(
+        PreferenciasDoAniversario? preferenciasDoAniversario,
+        DateTimeOffset atualizadoEm)
+    {
+        GarantaQueEstaPlanejado("Encontro cancelado não pode ter preferências de aniversário alteradas.");
+
+        if (!TipoEhAniversario(Tipo))
+        {
+            throw new ExcecaoDeDominioException(
+                "Preferências de aniversário somente podem ser informadas em encontros do tipo Aniversário.");
+        }
+
+        PreferenciasDoAniversario = preferenciasDoAniversario;
         AtualizadoEm = atualizadoEm;
     }
 
@@ -282,5 +313,28 @@ public sealed class Encontro : Entidade
         }
 
         return textoNormalizado;
+    }
+
+    private static PreferenciasDoAniversario? ValidePreferenciasDoAniversario(
+        string? tipo,
+        PreferenciasDoAniversario? preferenciasDoAniversario)
+    {
+        if (preferenciasDoAniversario is null)
+        {
+            return null;
+        }
+
+        if (!TipoEhAniversario(tipo))
+        {
+            throw new ExcecaoDeDominioException(
+                "Preferências de aniversário somente podem ser informadas em encontros do tipo Aniversário.");
+        }
+
+        return preferenciasDoAniversario;
+    }
+
+    private static bool TipoEhAniversario(string? tipo)
+    {
+        return string.Equals(tipo, TipoAniversario, StringComparison.OrdinalIgnoreCase);
     }
 }

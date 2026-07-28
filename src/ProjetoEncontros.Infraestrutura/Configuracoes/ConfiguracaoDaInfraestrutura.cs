@@ -49,6 +49,7 @@ public static class ConfiguracaoDaInfraestrutura
         servicos.AddScoped<IRepositorioDeTokensDeAtualizacao, RepositorioDeTokensDeAtualizacao>();
         servicos.AddScoped<IRepositorioDeGrupos, RepositorioDeGrupos>();
         servicos.AddScoped<IRepositorioDeEncontros, RepositorioDeEncontros>();
+        servicos.AddScoped<IRepositorioDeConvitesDoEncontroPorLink, RepositorioDeConvitesDoEncontroPorLink>();
         servicos.AddScoped<IRepositorioDeMemoriasDoEncontro, RepositorioDeMemoriasDoEncontro>();
         servicos.AddScoped<IRepositorioDeItensDoEncontro, RepositorioDeItensDoEncontro>();
         servicos.AddScoped<IRepositorioDeNotificacoes, RepositorioDeNotificacoes>();
@@ -64,6 +65,7 @@ public static class ConfiguracaoDaInfraestrutura
         servicos.AddScoped<IServicoDeHashDeSenha, ServicoDeHashDeSenha>();
         servicos.AddScoped<IGeradorDeTokenDeAcesso, GeradorDeTokenDeAcesso>();
         servicos.AddScoped<IGeradorDeTokenDeAtualizacao, GeradorDeTokenDeAtualizacao>();
+        servicos.AddSingleton<IGeradorDeTokenDeConvitePorLink, GeradorDeTokenDeConvitePorLink>();
         servicos.AddSingleton<IRelogio, RelogioDoSistema>();
 
         return servicos;

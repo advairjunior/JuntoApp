@@ -10,4 +10,5 @@ public sealed record EncontroCriadoResposta(
     string Situacao,
     string? Tipo = null,
     double? Latitude = null,
-    double? Longitude = null);
+    double? Longitude = null,
+    PreferenciasDoAniversarioResposta? PreferenciasDoAniversario = null);

@@ -3,6 +3,7 @@ using ProjetoEncontros.Aplicacao.Encontros.Contratos;
 using ProjetoEncontros.Aplicacao.Encontros.Interfaces;
 using ProjetoEncontros.Aplicacao.Grupos.Interfaces;
 using ProjetoEncontros.Aplicacao.Notificacoes.Interfaces;
+using ProjetoEncontros.Aplicacao.Usuarios.Interfaces;
 using ProjetoEncontros.Dominio.Encontros;
 using ProjetoEncontros.Dominio.Grupos;
 using ProjetoEncontros.Dominio.Notificacoes;
@@ -12,6 +13,7 @@ namespace ProjetoEncontros.Aplicacao.Encontros.CasosDeUso;
 public sealed class EditeEncontro(
     IRepositorioDeGrupos repositorioDeGrupos,
     IRepositorioDeEncontros repositorioDeEncontros,
+    IRepositorioDeUsuarios repositorioDeUsuarios,
     IServicoDeNotificacoes servicoDeNotificacoes,
     IRelogio relogio,
     IUnidadeDeTrabalho unidadeDeTrabalho)
@@ -36,15 +38,26 @@ public sealed class EditeEncontro(
 
         GarantaPermissaoParaEditar(participante);
 
+        DadosAnterioresDoEncontro dadosAnteriores = DadosAnterioresDoEncontro.Capture(encontro);
+        DateTimeOffset agora = relogio.Agora;
         encontro.AltereDados(
             comando.Titulo,
             comando.Descricao,
             comando.Local,
             comando.InicioEm,
-            relogio.Agora,
+            agora,
             comando.Tipo,
             comando.Latitude,
             comando.Longitude);
+
+        await AtualizacaoDosDadosDoEncontro.RegistreAsync(
+            repositorioDeEncontros,
+            repositorioDeUsuarios,
+            encontro,
+            dadosAnteriores,
+            comando.IdentificadorDoUsuario,
+            agora,
+            cancellationToken);
 
         await NotifiqueParticipantesAsync(
             encontro,
@@ -157,5 +170,111 @@ public sealed class EditeEncontro(
         {
             throw new UnauthorizedAccessException("Usuário não autenticado.");
         }
+    }
+}
+
+internal sealed record DadosAnterioresDoEncontro(
+    string Titulo,
+    string? Descricao,
+    string? Local,
+    double? Latitude,
+    double? Longitude,
+    DateTimeOffset InicioEm,
+    string? Tipo)
+{
+    public static DadosAnterioresDoEncontro Capture(Encontro encontro)
+    {
+        return new(
+            encontro.Titulo,
+            encontro.Descricao,
+            encontro.Local,
+            encontro.Localizacao?.Latitude,
+            encontro.Localizacao?.Longitude,
+            encontro.InicioEm,
+            encontro.Tipo);
+    }
+}
+
+internal static class AtualizacaoDosDadosDoEncontro
+{
+    public static async Task RegistreAsync(
+        IRepositorioDeEncontros repositorioDeEncontros,
+        IRepositorioDeUsuarios repositorioDeUsuarios,
+        Encontro encontro,
+        DadosAnterioresDoEncontro dadosAnteriores,
+        Guid identificadorDoUsuario,
+        DateTimeOffset publicadoEm,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyCollection<string> camposAlterados = ObtenhaCamposAlterados(encontro, dadosAnteriores);
+
+        if (camposAlterados.Count == 0)
+        {
+            return;
+        }
+
+        string nomeDoUsuario = await AcessoAItensDoEncontro.ObtenhaNomeDoUsuarioAsync(
+            repositorioDeUsuarios,
+            identificadorDoUsuario,
+            cancellationToken);
+        string descricaoDosCampos = ConcateneCampos(camposAlterados);
+
+        await AcessoAItensDoEncontro.RegistreAtualizacaoDoSistemaAsync(
+            repositorioDeEncontros,
+            repositorioDeUsuarios,
+            encontro.Identificador,
+            identificadorDoUsuario,
+            $"{nomeDoUsuario} atualizou os dados do encontro: {descricaoDosCampos}.",
+            publicadoEm,
+            cancellationToken);
+    }
+
+    private static IReadOnlyCollection<string> ObtenhaCamposAlterados(
+        Encontro encontro,
+        DadosAnterioresDoEncontro dadosAnteriores)
+    {
+        List<string> camposAlterados = [];
+
+        if (dadosAnteriores.InicioEm != encontro.InicioEm)
+        {
+            camposAlterados.Add("data/horário");
+        }
+
+        if (!string.Equals(dadosAnteriores.Local, encontro.Local, StringComparison.Ordinal) ||
+            dadosAnteriores.Latitude != encontro.Localizacao?.Latitude ||
+            dadosAnteriores.Longitude != encontro.Localizacao?.Longitude)
+        {
+            camposAlterados.Add("local");
+        }
+
+        if (!string.Equals(dadosAnteriores.Titulo, encontro.Titulo, StringComparison.Ordinal))
+        {
+            camposAlterados.Add("título");
+        }
+
+        if (!string.Equals(dadosAnteriores.Descricao, encontro.Descricao, StringComparison.Ordinal))
+        {
+            camposAlterados.Add("descrição");
+        }
+
+        if (!string.Equals(dadosAnteriores.Tipo, encontro.Tipo, StringComparison.Ordinal))
+        {
+            camposAlterados.Add("tipo");
+        }
+
+        return camposAlterados;
+    }
+
+    private static string ConcateneCampos(IReadOnlyCollection<string> campos)
+    {
+        if (campos.Count == 1)
+        {
+            return campos.Single();
+        }
+
+        IReadOnlyList<string> listaDeCampos = [.. campos];
+        string camposIniciais = string.Join(", ", listaDeCampos.Take(listaDeCampos.Count - 1));
+
+        return $"{camposIniciais} e {listaDeCampos[^1]}";
     }
 }

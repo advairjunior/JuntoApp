@@ -106,33 +106,96 @@ class _DockDeNavegacao extends StatelessWidget {
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: CoresDoAplicativo.fundoElevado.withValues(alpha: 0.9),
+              color: CoresDoAplicativo.fundoElevado.withValues(alpha: 0.92),
               borderRadius: raio,
-              border: Border.all(color: CoresDoAplicativo.bordaSuave),
+              border: Border.all(color: CoresDoAplicativo.bordaDiscreta),
             ),
             child: SizedBox(
               height: EspacamentosDoAplicativo.alturaDoDock,
-              child: NavigationBar(
-                selectedIndex: indiceSelecionado,
-                onDestinationSelected: aoSelecionar,
-                destinations: const <NavigationDestination>[
-                  NavigationDestination(
-                    icon: Icon(Icons.home_outlined),
-                    selectedIcon: Icon(Icons.home_rounded),
-                    label: 'Início',
+              child: Row(
+                children: <Widget>[
+                  _ItemDoDock(
+                    rotulo: 'Início',
+                    icone: Icons.home_outlined,
+                    iconeSelecionado: Icons.home_rounded,
+                    selecionado: indiceSelecionado == 0,
+                    aoTocar: () => aoSelecionar(0),
                   ),
-                  NavigationDestination(
-                    icon: Icon(Icons.photo_library_outlined),
-                    selectedIcon: Icon(Icons.photo_library_rounded),
-                    label: 'Memórias',
+                  _ItemDoDock(
+                    rotulo: 'Memórias',
+                    icone: Icons.photo_library_outlined,
+                    iconeSelecionado: Icons.photo_library_rounded,
+                    selecionado: indiceSelecionado == 1,
+                    aoTocar: () => aoSelecionar(1),
                   ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person_outline_rounded),
-                    selectedIcon: Icon(Icons.person_rounded),
-                    label: 'Perfil',
+                  _ItemDoDock(
+                    rotulo: 'Perfil',
+                    icone: Icons.person_outline_rounded,
+                    iconeSelecionado: Icons.person_rounded,
+                    selecionado: indiceSelecionado == 2,
+                    aoTocar: () => aoSelecionar(2),
                   ),
                 ],
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ItemDoDock extends StatelessWidget {
+  const _ItemDoDock({
+    required this.rotulo,
+    required this.icone,
+    required this.iconeSelecionado,
+    required this.selecionado,
+    required this.aoTocar,
+  });
+
+  final String rotulo;
+  final IconData icone;
+  final IconData iconeSelecionado;
+  final bool selecionado;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    Color cor = selecionado
+        ? CoresDoAplicativo.verdeDestaque
+        : CoresDoAplicativo.textoTerciario;
+
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selecionado,
+        label: rotulo,
+        child: InkWell(
+          onTap: aoTocar,
+          child: SizedBox.expand(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: Icon(
+                    selecionado ? iconeSelecionado : icone,
+                    key: ValueKey<bool>(selecionado),
+                    color: cor,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  rotulo,
+                  style: TextStyle(
+                    color: cor,
+                    fontSize: 11,
+                    fontWeight: selecionado ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

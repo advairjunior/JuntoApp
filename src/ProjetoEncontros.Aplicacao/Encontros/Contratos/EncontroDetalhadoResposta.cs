@@ -16,4 +16,5 @@ public sealed record EncontroDetalhadoResposta(
     IReadOnlyCollection<PresencaNoEncontroResposta> PresencasConfirmadas,
     string? Tipo = null,
     double? Latitude = null,
-    double? Longitude = null);
+    double? Longitude = null,
+    PreferenciasDoAniversarioResposta? PreferenciasDoAniversario = null);

@@ -29,7 +29,7 @@ abstract final class TemaDoAplicativo {
       scaffoldBackgroundColor: CoresDoAplicativo.fundoPrincipal,
       canvasColor: CoresDoAplicativo.fundoSecundario,
       dividerColor: CoresDoAplicativo.bordaDiscreta,
-      splashFactory: InkSparkle.splashFactory,
+      splashFactory: InkRipple.splashFactory,
       textTheme: const TextTheme(
         headlineLarge: TipografiaDoAplicativo.tituloGrande,
         headlineMedium: TipografiaDoAplicativo.tituloMedio,
@@ -50,6 +50,10 @@ abstract final class TemaDoAplicativo {
         foregroundColor: CoresDoAplicativo.textoPrincipal,
         surfaceTintColor: CoresDoAplicativo.transparente,
         titleTextStyle: TipografiaDoAplicativo.tituloDeCartao,
+      ),
+      iconTheme: const IconThemeData(
+        color: CoresDoAplicativo.textoSecundario,
+        size: 22,
       ),
       cardTheme: CardThemeData(
         elevation: 0,
@@ -145,7 +149,7 @@ abstract final class TemaDoAplicativo {
         height: 64,
         elevation: 0,
         backgroundColor: CoresDoAplicativo.transparente,
-        indicatorColor: CoresDoAplicativo.fundoDoCartaoSuave,
+        indicatorColor: CoresDoAplicativo.transparente,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         iconTheme: WidgetStateProperty.resolveWith<IconThemeData>(
           (Set<WidgetState> estados) {

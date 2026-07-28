@@ -15,4 +15,5 @@ public sealed record RespostaDeEncontroDetalhado(
     IReadOnlyCollection<RespostaDeParticipanteDoEncontro> Participantes,
     IReadOnlyCollection<RespostaDePresencaNoEncontro> PresencasConfirmadas,
     string? Tipo = null,
-    RespostaDeLocalizacaoDoEncontro? Localizacao = null);
+    RespostaDeLocalizacaoDoEncontro? Localizacao = null,
+    RespostaDePreferenciasDoAniversario? PreferenciasDoAniversario = null);

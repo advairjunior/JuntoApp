@@ -40,4 +40,15 @@ abstract final class ConfiguracaoDoAmbiente {
 
     return Uri.parse(urlDaApi).resolve(caminho).toString();
   }
+
+  static String crieUrlDoConvite(String token) {
+    Uri enderecoDoAplicativo = Uri.base;
+
+    return enderecoDoAplicativo
+        .replace(
+          query: null,
+          fragment: '/convite/$token',
+        )
+        .toString();
+  }
 }

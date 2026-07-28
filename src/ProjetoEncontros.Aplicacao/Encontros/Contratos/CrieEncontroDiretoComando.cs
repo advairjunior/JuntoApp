@@ -8,4 +8,5 @@ public sealed record CrieEncontroDiretoComando(
     DateTimeOffset InicioEm,
     string? Tipo = null,
     double? Latitude = null,
-    double? Longitude = null);
+    double? Longitude = null,
+    PreferenciasDoAniversarioComando? PreferenciasDoAniversario = null);

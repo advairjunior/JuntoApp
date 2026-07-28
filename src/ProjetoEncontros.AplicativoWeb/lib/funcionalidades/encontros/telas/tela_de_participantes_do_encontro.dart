@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/cabecalho_da_pagina.dart';
@@ -6,10 +7,14 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/carta
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/estado_vazio.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/estrutura_responsiva_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/indicador_de_situacao.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/configuracao/configuracao_do_ambiente.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/erros/excecao_da_api.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/foto_de_perfil.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/imagem_privada.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/cores_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos_do_aplicativo.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/convites_por_link/dados/repositorio_de_convites_por_link.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/convites_por_link/modelos/convite_por_link.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/dados/repositorio_de_encontros.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/estado/controlador_do_detalhe_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/estado/estado_do_detalhe_do_encontro.dart';
@@ -100,6 +105,8 @@ class _EstadoDaTelaDeParticipantesDoEncontro
               _participantePassaNoFiltro(participante),
         )
         .toList();
+    bool usuarioAtualEhCriador =
+        encontro.participanteAtual?.papel.toLowerCase() == 'organizador';
     bool filtroEstaVazio = organizadores.isEmpty &&
         demaisParticipantes.isEmpty &&
         convidados.isEmpty;
@@ -147,12 +154,16 @@ class _EstadoDaTelaDeParticipantesDoEncontro
                   _SecaoDeParticipantes(
                     titulo: 'Organização',
                     participantes: organizadores,
+                    usuarioAtualEhCriador: usuarioAtualEhCriador,
+                    aoGerenciarPapel: _gerenciePapelAsync,
                   ),
                 if (demaisParticipantes.isNotEmpty) ...<Widget>[
                   const SizedBox(height: EspacamentosDoAplicativo.grande),
                   _SecaoDeParticipantes(
                     titulo: 'Participantes',
                     participantes: demaisParticipantes,
+                    usuarioAtualEhCriador: usuarioAtualEhCriador,
+                    aoGerenciarPapel: _gerenciePapelAsync,
                   ),
                 ],
                 if (convidados.isNotEmpty) ...<Widget>[
@@ -160,6 +171,8 @@ class _EstadoDaTelaDeParticipantesDoEncontro
                   _SecaoDeParticipantes(
                     titulo: 'Aguardando resposta',
                     participantes: convidados,
+                    usuarioAtualEhCriador: usuarioAtualEhCriador,
+                    aoGerenciarPapel: _gerenciePapelAsync,
                   ),
                 ],
                 if (filtroEstaVazio)
@@ -186,7 +199,62 @@ class _EstadoDaTelaDeParticipantesDoEncontro
 
   bool _participanteEhOrganizador(ParticipanteDoEncontro participante) {
     String papel = participante.papel.toLowerCase();
-    return papel == 'dono' || papel == 'organizador';
+    return papel == 'dono' ||
+        papel == 'organizador' ||
+        papel == 'administrador';
+  }
+
+  Future<void> _gerenciePapelAsync(
+    ParticipanteDoEncontro participante,
+  ) async {
+    bool participanteEhAdministrador =
+        participante.papel.toLowerCase() == 'administrador';
+    String papelDesejado =
+        participanteEhAdministrador ? 'Convidado' : 'Administrador';
+    String acao = participanteEhAdministrador
+        ? 'Remover como administrador'
+        : 'Tornar administrador';
+    String explicacao = participanteEhAdministrador
+        ? '${participante.nome} deixará de editar e administrar este encontro.'
+        : '${participante.nome} poderá editar o encontro, convidar pessoas e '
+            'gerenciar participantes.';
+
+    bool confirmou = await showDialog<bool>(
+          context: context,
+          builder: (BuildContext contextoDoDialogo) {
+            return AlertDialog(
+              title: Text('$acao?'),
+              content: Text(explicacao),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(contextoDoDialogo).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  key: const Key('confirmar-alteracao-de-papel'),
+                  onPressed: () => Navigator.of(contextoDoDialogo).pop(true),
+                  child: Text(acao),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!confirmou || !mounted) {
+      return;
+    }
+
+    await ref
+        .read(
+          provedorDoControladorDoDetalheDoEncontro(
+            widget.identificadorDoEncontro,
+          ).notifier,
+        )
+        .alterePapelDoParticipanteAsync(
+          identificadorDoUsuario: participante.identificadorDoUsuario,
+          papel: papelDesejado,
+        );
   }
 
   bool _participantePassaNoFiltro(ParticipanteDoEncontro participante) {
@@ -235,12 +303,13 @@ class _EstadoDaTelaDeParticipantesDoEncontro
                         pessoa.identificadorDoUsuario,
                       ),
                     )
-                    .take(5)
                     .toList();
 
             return _FormularioDeConvite(
               pessoasFrequentes: sugestoes,
               pessoasEstaoCarregando: pessoas.isLoading,
+              aoCriarLink: _crieLinkDeConviteAsync,
+              aoRevogarLink: _revogueLinkDeConviteAsync,
               aoConvidarPessoaFrequente: (PessoaFrequente pessoa) =>
                   _convidePessoaFrequenteAsync(pessoa),
               aoEnviar: (String email) async {
@@ -268,6 +337,53 @@ class _EstadoDaTelaDeParticipantesDoEncontro
         );
       },
     );
+  }
+
+  Future<ResultadoDaCriacaoDoLink> _crieLinkDeConviteAsync() async {
+    try {
+      ConvitePorLinkCriado convite = await ref
+          .read(provedorDoRepositorioDeConvitesPorLink)
+          .crieAsync(widget.identificadorDoEncontro);
+      String link = ConfiguracaoDoAmbiente.crieUrlDoConvite(convite.token);
+
+      return (
+        criou: true,
+        link: link,
+        expiraEm: convite.expiraEm,
+        mensagem: null,
+      );
+    } on ExcecaoDaApi catch (excecao) {
+      return (
+        criou: false,
+        link: null,
+        expiraEm: null,
+        mensagem: excecao.mensagem,
+      );
+    } catch (_) {
+      return (
+        criou: false,
+        link: null,
+        expiraEm: null,
+        mensagem: 'Não foi possível criar o link do convite.',
+      );
+    }
+  }
+
+  Future<ResultadoDoConvite> _revogueLinkDeConviteAsync() async {
+    try {
+      await ref
+          .read(provedorDoRepositorioDeConvitesPorLink)
+          .revogueAsync(widget.identificadorDoEncontro);
+
+      return (enviou: true, mensagem: null);
+    } on ExcecaoDaApi catch (excecao) {
+      return (enviou: false, mensagem: excecao.mensagem);
+    } catch (_) {
+      return (
+        enviou: false,
+        mensagem: 'Não foi possível desativar o link.',
+      );
+    }
   }
 
   Future<ResultadoDoConvite> _convidePessoaFrequenteAsync(
@@ -395,10 +511,14 @@ class _SecaoDeParticipantes extends StatelessWidget {
   const _SecaoDeParticipantes({
     required this.titulo,
     required this.participantes,
+    required this.usuarioAtualEhCriador,
+    required this.aoGerenciarPapel,
   });
 
   final String titulo;
   final List<ParticipanteDoEncontro> participantes;
+  final bool usuarioAtualEhCriador;
+  final ValueChanged<ParticipanteDoEncontro> aoGerenciarPapel;
 
   @override
   Widget build(BuildContext context) {
@@ -415,6 +535,11 @@ class _SecaoDeParticipantes extends StatelessWidget {
           ...participantes.map(
             (ParticipanteDoEncontro participante) => _LinhaDeParticipante(
               participante: participante,
+              podeGerenciarPapel: usuarioAtualEhCriador &&
+                  !participante.usuarioAtual &&
+                  participante.papel.toLowerCase() != 'organizador' &&
+                  participante.situacao.toLowerCase() != 'removido',
+              aoGerenciarPapel: () => aoGerenciarPapel(participante),
             ),
           ),
         ],
@@ -424,9 +549,15 @@ class _SecaoDeParticipantes extends StatelessWidget {
 }
 
 class _LinhaDeParticipante extends StatelessWidget {
-  const _LinhaDeParticipante({required this.participante});
+  const _LinhaDeParticipante({
+    required this.participante,
+    required this.podeGerenciarPapel,
+    required this.aoGerenciarPapel,
+  });
 
   final ParticipanteDoEncontro participante;
+  final bool podeGerenciarPapel;
+  final VoidCallback aoGerenciarPapel;
 
   @override
   Widget build(BuildContext context) {
@@ -476,6 +607,15 @@ class _LinhaDeParticipante extends StatelessWidget {
             const SizedBox(width: EspacamentosDoAplicativo.pequeno),
             _construaSituacao(),
           ],
+          if (podeGerenciarPapel)
+            IconButton(
+              key: Key(
+                'gerenciar-papel-${participante.identificadorDoUsuario}',
+              ),
+              tooltip: 'Gerenciar permissão de ${participante.nome}',
+              onPressed: aoGerenciarPapel,
+              icon: const Icon(Icons.more_vert_rounded),
+            ),
         ],
       ),
     );
@@ -491,7 +631,9 @@ class _LinhaDeParticipante extends StatelessWidget {
 
   bool _ehOrganizador(ParticipanteDoEncontro participante) {
     String papel = participante.papel.toLowerCase();
-    return papel == 'dono' || papel == 'organizador';
+    return papel == 'dono' ||
+        papel == 'organizador' ||
+        papel == 'administrador';
   }
 
   String _formateSituacao(String situacao) {
@@ -530,12 +672,80 @@ class _FotoDoParticipante extends StatelessWidget {
 
   final ParticipanteDoEncontro participante;
 
+  Future<void> _abraFotoAmpliadaAsync(
+    BuildContext context,
+    String recurso,
+  ) {
+    return showDialog<void>(
+      context: context,
+      useSafeArea: false,
+      builder: (BuildContext contextoDoDialogo) {
+        return Dialog.fullscreen(
+          key: Key(
+            'foto-ampliada-do-participante-'
+            '${participante.identificadorDoUsuario}',
+          ),
+          backgroundColor: Colors.black,
+          child: Scaffold(
+            backgroundColor: Colors.black,
+            appBar: AppBar(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              title: Text(participante.nome),
+              leading: IconButton(
+                tooltip: 'Fechar',
+                onPressed: () => Navigator.of(contextoDoDialogo).pop(),
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ),
+            body: InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 4,
+              child: Center(
+                child: ImagemPrivada(
+                  recurso: recurso,
+                  ajuste: BoxFit.contain,
+                  construaSubstituta: (_) => const Icon(
+                    Icons.broken_image_outlined,
+                    size: 52,
+                    color: Colors.white54,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FotoDePerfil(
+    String recurso = ConfiguracaoDoAmbiente.crieUrlAbsoluta(
+      participante.urlDaFotoDePerfil,
+    );
+    Widget foto = FotoDePerfil(
       url: participante.urlDaFotoDePerfil,
       iniciais: participante.iniciais,
       dimensao: 44,
+    );
+
+    if (recurso.isEmpty) {
+      return foto;
+    }
+
+    return Semantics(
+      button: true,
+      label: 'Ver foto de ${participante.nome}',
+      child: InkResponse(
+        key: Key(
+          'abrir-foto-do-participante-'
+          '${participante.identificadorDoUsuario}',
+        ),
+        radius: 24,
+        onTap: () => _abraFotoAmpliadaAsync(context, recurso),
+        child: foto,
+      ),
     );
   }
 }
@@ -601,17 +811,27 @@ class _AcaoDeConvite extends StatelessWidget {
 }
 
 typedef ResultadoDoConvite = ({bool enviou, String? mensagem});
+typedef ResultadoDaCriacaoDoLink = ({
+  bool criou,
+  String? link,
+  DateTime? expiraEm,
+  String? mensagem,
+});
 
 class _FormularioDeConvite extends StatefulWidget {
   const _FormularioDeConvite({
     required this.pessoasFrequentes,
     required this.pessoasEstaoCarregando,
+    required this.aoCriarLink,
+    required this.aoRevogarLink,
     required this.aoConvidarPessoaFrequente,
     required this.aoEnviar,
   });
 
   final List<PessoaFrequente> pessoasFrequentes;
   final bool pessoasEstaoCarregando;
+  final Future<ResultadoDaCriacaoDoLink> Function() aoCriarLink;
+  final Future<ResultadoDoConvite> Function() aoRevogarLink;
   final Future<ResultadoDoConvite> Function(PessoaFrequente pessoa)
       aoConvidarPessoaFrequente;
   final Future<ResultadoDoConvite> Function(String email) aoEnviar;
@@ -622,18 +842,30 @@ class _FormularioDeConvite extends StatefulWidget {
 
 class _EstadoDoFormularioDeConvite extends State<_FormularioDeConvite> {
   final GlobalKey<FormState> _chaveDoFormulario = GlobalKey<FormState>();
+  final TextEditingController _controladorDaBusca = TextEditingController();
   final TextEditingController _controladorDoEmail = TextEditingController();
   bool _estaEnviando = false;
+  String? _linkCriado;
+  DateTime? _linkExpiraEm;
   String? _mensagemDeErro;
 
   @override
   void dispose() {
+    _controladorDaBusca.dispose();
     _controladorDoEmail.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    String termoDaBusca = _controladorDaBusca.text.trim().toLowerCase();
+    List<PessoaFrequente> pessoasEncontradas = widget.pessoasFrequentes
+        .where(
+          (PessoaFrequente pessoa) =>
+              pessoa.nome.toLowerCase().contains(termoDaBusca),
+        )
+        .toList();
+
     return Padding(
       padding: EdgeInsets.fromLTRB(
         20,
@@ -641,118 +873,260 @@ class _EstadoDoFormularioDeConvite extends State<_FormularioDeConvite> {
         20,
         20 + MediaQuery.viewInsetsOf(context).bottom,
       ),
-      child: Form(
-        key: _chaveDoFormulario,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            Text(
-              'Convidar pessoa',
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: EspacamentosDoAplicativo.minimo),
-            const Text(
-              'Envie um convite para quem deve participar deste encontro.',
-              style: TextStyle(color: CoresDoAplicativo.textoSecundario),
-            ),
-            if (widget.pessoasEstaoCarregando) ...<Widget>[
-              const SizedBox(height: EspacamentosDoAplicativo.padrao),
-              const LinearProgressIndicator(),
-            ],
-            if (widget.pessoasFrequentes.isNotEmpty) ...<Widget>[
-              const SizedBox(height: EspacamentosDoAplicativo.padrao),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _chaveDoFormulario,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
               Text(
-                'Pessoas frequentes',
-                style: Theme.of(context).textTheme.titleSmall,
+                'Convidar pessoa',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: EspacamentosDoAplicativo.pequeno),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 230),
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: widget.pessoasFrequentes.length,
-                  separatorBuilder: (_, __) => const SizedBox(
-                    height: EspacamentosDoAplicativo.pequeno,
-                  ),
-                  itemBuilder: (BuildContext context, int indice) {
-                    PessoaFrequente pessoa = widget.pessoasFrequentes[indice];
-
-                    return _SugestaoDePessoaFrequente(
-                      pessoa: pessoa,
-                      estaEnviando: _estaEnviando,
-                      aoConvidar: () => _confirmePessoaFrequenteAsync(pessoa),
-                    );
-                  },
-                ),
+              const SizedBox(height: EspacamentosDoAplicativo.minimo),
+              const Text(
+                'Envie um convite para quem deve participar deste encontro.',
+                style: TextStyle(color: CoresDoAplicativo.textoSecundario),
               ),
               const SizedBox(height: EspacamentosDoAplicativo.padrao),
-              const Row(
-                children: <Widget>[
-                  Expanded(child: Divider()),
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: EspacamentosDoAplicativo.medio,
-                    ),
-                    child: Text(
-                      'ou convide por e-mail',
-                      style: TextStyle(
-                        color: CoresDoAplicativo.textoTerciario,
-                        fontSize: 12,
+              _ConviteCompartilhavel(
+                estaExecutando: _estaEnviando,
+                link: _linkCriado,
+                expiraEm: _linkExpiraEm,
+                aoCriar: _crieLinkAsync,
+                aoCopiar: _copieLinkAsync,
+                aoRevogar: _revogueLinkAsync,
+              ),
+              if (widget.pessoasEstaoCarregando) ...<Widget>[
+                const SizedBox(height: EspacamentosDoAplicativo.padrao),
+                const LinearProgressIndicator(),
+              ],
+              if (widget.pessoasFrequentes.isNotEmpty) ...<Widget>[
+                const SizedBox(height: EspacamentosDoAplicativo.padrao),
+                Text(
+                  'Pessoas conhecidas',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: EspacamentosDoAplicativo.pequeno),
+                TextField(
+                  key: const Key('buscar-pessoa-conhecida'),
+                  controller: _controladorDaBusca,
+                  enabled: !_estaEnviando,
+                  textInputAction: TextInputAction.search,
+                  decoration: const InputDecoration(
+                    labelText: 'Buscar por nome',
+                    prefixIcon: Icon(Icons.search_rounded),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: EspacamentosDoAplicativo.pequeno),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 230),
+                  child: pessoasEncontradas.isEmpty
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(
+                              EspacamentosDoAplicativo.padrao,
+                            ),
+                            child: Text(
+                              'Nenhuma pessoa conhecida encontrada.',
+                              style: TextStyle(
+                                color: CoresDoAplicativo.textoSecundario,
+                              ),
+                            ),
+                          ),
+                        )
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: pessoasEncontradas.length,
+                          separatorBuilder: (_, __) => const SizedBox(
+                            height: EspacamentosDoAplicativo.pequeno,
+                          ),
+                          itemBuilder: (BuildContext context, int indice) {
+                            PessoaFrequente pessoa = pessoasEncontradas[indice];
+
+                            return _SugestaoDePessoaFrequente(
+                              pessoa: pessoa,
+                              estaEnviando: _estaEnviando,
+                              aoConvidar: () =>
+                                  _confirmePessoaFrequenteAsync(pessoa),
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: EspacamentosDoAplicativo.padrao),
+                const Row(
+                  children: <Widget>[
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: EspacamentosDoAplicativo.medio,
+                      ),
+                      child: Text(
+                        'ou convide por e-mail',
+                        style: TextStyle(
+                          color: CoresDoAplicativo.textoTerciario,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
-                  ),
-                  Expanded(child: Divider()),
-                ],
-              ),
-            ],
-            const SizedBox(height: EspacamentosDoAplicativo.padrao),
-            TextFormField(
-              key: const Key('email-do-convidado'),
-              controller: _controladorDoEmail,
-              autofocus: false,
-              enabled: !_estaEnviando,
-              keyboardType: TextInputType.emailAddress,
-              textInputAction: TextInputAction.done,
-              decoration: const InputDecoration(
-                labelText: 'E-mail',
-                prefixIcon: Icon(Icons.mail_outline_rounded),
-              ),
-              validator: (String? email) {
-                String emailNormalizado = email?.trim() ?? '';
-                bool formatoEhValido = RegExp(
-                  r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-                ).hasMatch(emailNormalizado);
+                    Expanded(child: Divider()),
+                  ],
+                ),
+              ],
+              const SizedBox(height: EspacamentosDoAplicativo.padrao),
+              TextFormField(
+                key: const Key('email-do-convidado'),
+                controller: _controladorDoEmail,
+                autofocus: false,
+                enabled: !_estaEnviando,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(
+                  labelText: 'E-mail',
+                  prefixIcon: Icon(Icons.mail_outline_rounded),
+                ),
+                validator: (String? email) {
+                  String emailNormalizado = email?.trim() ?? '';
+                  bool formatoEhValido = RegExp(
+                    r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
+                  ).hasMatch(emailNormalizado);
 
-                return formatoEhValido ? null : 'Informe um e-mail válido.';
-              },
-              onFieldSubmitted: (_) => _envieAsync(),
-            ),
-            if (_mensagemDeErro != null) ...<Widget>[
-              const SizedBox(height: EspacamentosDoAplicativo.pequeno),
-              Text(
-                _mensagemDeErro!,
-                style: const TextStyle(color: CoresDoAplicativo.coral),
+                  return formatoEhValido ? null : 'Informe um e-mail válido.';
+                },
+                onFieldSubmitted: (_) => _envieAsync(),
+              ),
+              if (_mensagemDeErro != null) ...<Widget>[
+                const SizedBox(height: EspacamentosDoAplicativo.pequeno),
+                Text(
+                  _mensagemDeErro!,
+                  style: const TextStyle(color: CoresDoAplicativo.coral),
+                ),
+              ],
+              const SizedBox(height: EspacamentosDoAplicativo.padrao),
+              FilledButton(
+                key: const Key('confirmar-convite'),
+                onPressed: _estaEnviando ? null : _envieAsync,
+                child: _estaEnviando
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Enviar convite'),
               ),
             ],
-            const SizedBox(height: EspacamentosDoAplicativo.padrao),
-            FilledButton(
-              key: const Key('confirmar-convite'),
-              onPressed: _estaEnviando ? null : _envieAsync,
-              child: _estaEnviando
-                  ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Enviar convite'),
-            ),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  Future<void> _crieLinkAsync() async {
+    if (_estaEnviando) {
+      return;
+    }
+
+    setState(() {
+      _estaEnviando = true;
+      _mensagemDeErro = null;
+    });
+    ResultadoDaCriacaoDoLink resultado = await widget.aoCriarLink();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _estaEnviando = false;
+      _linkCriado = resultado.link;
+      _linkExpiraEm = resultado.expiraEm;
+      _mensagemDeErro = resultado.mensagem;
+    });
+
+    if (resultado.criou && resultado.link != null) {
+      bool copiou = await _tenteCopiarAsync(resultado.link!);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            copiou
+                ? 'Link criado e copiado.'
+                : 'Link criado. Toque em Copiar para compartilhá-lo.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _copieLinkAsync() async {
+    String? link = _linkCriado;
+
+    if (link == null) {
+      return;
+    }
+
+    bool copiou = await _tenteCopiarAsync(link);
+
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          copiou ? 'Link copiado.' : 'O navegador não permitiu copiar o link.',
+        ),
+      ),
+    );
+  }
+
+  Future<bool> _tenteCopiarAsync(String link) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: link));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _revogueLinkAsync() async {
+    if (_estaEnviando) {
+      return;
+    }
+
+    setState(() {
+      _estaEnviando = true;
+      _mensagemDeErro = null;
+    });
+    ResultadoDoConvite resultado = await widget.aoRevogarLink();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _estaEnviando = false;
+      _mensagemDeErro = resultado.mensagem;
+
+      if (resultado.enviou) {
+        _linkCriado = null;
+        _linkExpiraEm = null;
+      }
+    });
+
+    if (resultado.enviou) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Link desativado.')),
+      );
+    }
   }
 
   Future<void> _envieAsync() async {
@@ -832,6 +1206,98 @@ class _EstadoDoFormularioDeConvite extends State<_FormularioDeConvite> {
       _mensagemDeErro =
           resultado.mensagem ?? 'Não foi possível enviar o convite.';
     });
+  }
+}
+
+class _ConviteCompartilhavel extends StatelessWidget {
+  const _ConviteCompartilhavel({
+    required this.estaExecutando,
+    required this.link,
+    required this.expiraEm,
+    required this.aoCriar,
+    required this.aoCopiar,
+    required this.aoRevogar,
+  });
+
+  final bool estaExecutando;
+  final String? link;
+  final DateTime? expiraEm;
+  final VoidCallback aoCriar;
+  final VoidCallback aoCopiar;
+  final VoidCallback aoRevogar;
+
+  @override
+  Widget build(BuildContext context) {
+    return CartaoDoAplicativo(
+      preenchimento: const EdgeInsets.all(EspacamentosDoAplicativo.padrao),
+      filho: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(
+                Icons.link_rounded,
+                color: CoresDoAplicativo.verdeDestaque,
+              ),
+              const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+              Expanded(
+                child: Text(
+                  'Convite por link',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: EspacamentosDoAplicativo.pequeno),
+          Text(
+            link == null
+                ? 'Crie um link para enviar pelo WhatsApp ou por outro aplicativo.'
+                : 'O link está pronto e pode ser enviado para quem você quiser convidar.',
+            style: const TextStyle(
+              color: CoresDoAplicativo.textoSecundario,
+            ),
+          ),
+          if (expiraEm != null) ...<Widget>[
+            const SizedBox(height: EspacamentosDoAplicativo.pequeno),
+            Text(
+              'Válido até ${MaterialLocalizations.of(context).formatMediumDate(expiraEm!)} às ${TimeOfDay.fromDateTime(expiraEm!).format(context)}',
+              style: const TextStyle(
+                color: CoresDoAplicativo.textoTerciario,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          const SizedBox(height: EspacamentosDoAplicativo.medio),
+          if (link == null)
+            OutlinedButton.icon(
+              key: const Key('criar-link-de-convite'),
+              onPressed: estaExecutando ? null : aoCriar,
+              icon: const Icon(Icons.content_copy_rounded),
+              label: const Text('Criar e copiar link'),
+            )
+          else
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    key: const Key('copiar-link-de-convite'),
+                    onPressed: estaExecutando ? null : aoCopiar,
+                    icon: const Icon(Icons.content_copy_rounded),
+                    label: const Text('Copiar'),
+                  ),
+                ),
+                const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+                IconButton(
+                  key: const Key('revogar-link-de-convite'),
+                  tooltip: 'Desativar link',
+                  onPressed: estaExecutando ? null : aoRevogar,
+                  icon: const Icon(Icons.link_off_rounded),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
   }
 }
 

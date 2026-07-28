@@ -5,6 +5,7 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/autenticacao/cont
 import 'package:projeto_encontros_aplicativo_web/compartilhado/autenticacao/estado_da_sessao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/navegacao/estrutura_com_navegacao.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/combinados/telas/tela_de_combinados.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/convites_por_link/telas/tela_de_convite_por_link.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/entrada/telas/tela_de_cadastro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/entrada/telas/tela_de_entrada.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/entrada/telas/tela_de_inicializacao.dart';
@@ -79,13 +80,24 @@ final provedorDasRotas = Provider<GoRouter>((Ref referencia) {
           return TelaDeEntrada(
             cadastroFoiConcluido:
                 estado.uri.queryParameters['cadastro'] == 'concluido',
+            retorno: estado.uri.queryParameters['retorno'],
           );
         },
       ),
       GoRoute(
         path: '/cadastro',
         builder: (BuildContext context, GoRouterState estado) {
-          return const TelaDeCadastro();
+          return TelaDeCadastro(
+            retorno: estado.uri.queryParameters['retorno'],
+          );
+        },
+      ),
+      GoRoute(
+        path: '/convite/:token',
+        builder: (BuildContext context, GoRouterState estado) {
+          return TelaDeConvitePorLink(
+            token: estado.pathParameters['token']!,
+          );
         },
       ),
       GoRoute(
