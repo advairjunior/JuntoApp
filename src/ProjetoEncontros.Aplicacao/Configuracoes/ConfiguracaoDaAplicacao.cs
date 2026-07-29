@@ -89,6 +89,7 @@ public static class ConfiguracaoDaAplicacao
         servicos.AddScoped<ObtenhaPreferenciasDeNotificacao>();
         servicos.AddScoped<AtualizePreferenciasDeNotificacao>();
         servicos.AddScoped<ListePessoasFrequentes>();
+        servicos.AddScoped<ObtenhaHistoricoComPessoa>();
 
         return servicos;
     }

@@ -262,55 +262,69 @@ class _EstadoDaTelaDePerfil extends ConsumerState<TelaDePerfil> {
       context: context,
       backgroundColor: CoresDoAplicativo.fundoDoCartao,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (BuildContext contextoDaFolha) {
         return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Foto de perfil',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: EspacamentosDoAplicativo.medio),
-                ListTile(
-                  key: const Key('tirar-foto-do-perfil'),
-                  leading: const Icon(Icons.camera_alt_outlined),
-                  title: const Text('Tirar foto'),
-                  onTap: () => contextoDaFolha.pop('camera'),
-                ),
-                ListTile(
-                  key: const Key('escolher-foto-do-perfil'),
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: const Text('Escolher da galeria'),
-                  onTap: () => contextoDaFolha.pop('galeria'),
-                ),
-                if (temFoto)
-                  ListTile(
-                    key: const Key('remover-foto-do-perfil'),
-                    leading: const Icon(
-                      Icons.no_photography_outlined,
-                      color: CoresDoAplicativo.coral,
-                    ),
-                    title: const Text(
-                      'Remover foto',
-                      style: TextStyle(color: CoresDoAplicativo.coral),
-                    ),
-                    onTap: () => contextoDaFolha.pop('remover'),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Foto de perfil',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-              ],
+                  const SizedBox(height: EspacamentosDoAplicativo.medio),
+                  ListTile(
+                    key: const Key('tirar-foto-do-perfil'),
+                    leading: const Icon(Icons.camera_front_outlined),
+                    title: const Text('Câmera frontal'),
+                    onTap: () => contextoDaFolha.pop('camera-frontal'),
+                  ),
+                  ListTile(
+                    key: const Key('tirar-foto-traseira-do-perfil'),
+                    leading: const Icon(Icons.camera_rear_outlined),
+                    title: const Text('Câmera traseira'),
+                    onTap: () => contextoDaFolha.pop('camera-traseira'),
+                  ),
+                  ListTile(
+                    key: const Key('escolher-foto-do-perfil'),
+                    leading: const Icon(Icons.photo_library_outlined),
+                    title: const Text('Escolher da galeria'),
+                    onTap: () => contextoDaFolha.pop('galeria'),
+                  ),
+                  if (temFoto)
+                    ListTile(
+                      key: const Key('remover-foto-do-perfil'),
+                      leading: const Icon(
+                        Icons.no_photography_outlined,
+                        color: CoresDoAplicativo.coral,
+                      ),
+                      title: const Text(
+                        'Remover foto',
+                        style: TextStyle(color: CoresDoAplicativo.coral),
+                      ),
+                      onTap: () => contextoDaFolha.pop('remover'),
+                    ),
+                ],
+              ),
             ),
           ),
         );
       },
     );
 
-    if (acao == 'camera') {
+    if (acao == 'camera-frontal') {
       await _altereFotoAsync(
         usuario,
-        EnumeradorDeOrigemDaImagem.camera,
+        EnumeradorDeOrigemDaImagem.cameraFrontal,
+      );
+    } else if (acao == 'camera-traseira') {
+      await _altereFotoAsync(
+        usuario,
+        EnumeradorDeOrigemDaImagem.cameraTraseira,
       );
     } else if (acao == 'galeria') {
       await _altereFotoAsync(
@@ -898,7 +912,7 @@ class _PassoDaInstalacao extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Icon(icone, color: CoresDoAplicativo.verdeDestaque),
+          Icon(icone, color: CoresDoAplicativo.azulInteracao),
           const SizedBox(width: EspacamentosDoAplicativo.medio),
           Expanded(child: Text(texto)),
         ],

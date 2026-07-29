@@ -33,8 +33,15 @@ public sealed class ServicoDeBuscaDeLocalizacao : IServicoDeBuscaDeLocalizacao, 
         try
         {
             List<ResultadoDoNominatim> resultados = await ConsulteAsync(
-                $"{termo}, Goiânia, Goiás, Brasil",
+                termo,
                 cancellationToken);
+
+            if (resultados.Count == 0)
+            {
+                resultados = await ConsulteAsync(
+                    $"{termo}, Goiânia, Goiás, Brasil",
+                    cancellationToken);
+            }
 
             return [.. resultados
                 .Select(ConvertaResultado)
@@ -63,7 +70,7 @@ public sealed class ServicoDeBuscaDeLocalizacao : IServicoDeBuscaDeLocalizacao, 
         string termoCodificado = Uri.EscapeDataString(termo);
         string endereco =
             $"/search?q={termoCodificado}&format=jsonv2&addressdetails=1" +
-            "&accept-language=pt-BR&countrycodes=br&layer=address,poi&dedupe=1&limit=10" +
+            "&accept-language=pt-BR&countrycodes=br&dedupe=1&limit=10" +
             "&viewbox=-49.55,-16.45,-49.00,-16.95&bounded=1";
 
         try
