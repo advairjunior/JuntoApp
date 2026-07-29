@@ -21,6 +21,8 @@ public sealed class CrieMemoriaDoEncontro(
         "image/jpeg",
         "image/png",
         "image/webp",
+        "audio/mp4",
+        "audio/webm",
         "video/mp4",
         "video/quicktime",
         "video/webm"
@@ -241,12 +243,22 @@ public sealed class CrieMemoriaDoEncontro(
                 $"Uma publicação pode conter no máximo {QuantidadeMaximaDeMidias} mídias.");
         }
 
+        bool temAudio = comando.Arquivos.Any(arquivo =>
+            arquivo.TipoDeConteudo.StartsWith("audio/", StringComparison.OrdinalIgnoreCase));
+
+        if (temAudio && comando.Arquivos.Count != 1)
+        {
+            throw new ExcecaoDeAplicacaoException(
+                "Uma publicação com áudio deve conter exatamente um arquivo.");
+        }
+
         foreach (ArquivoDaMemoriaComando arquivo in comando.Arquivos)
         {
             if (!TiposDeConteudoPermitidos.Contains(arquivo.TipoDeConteudo))
             {
                 throw new ExcecaoDeAplicacaoException(
-                    "A mídia deve ser uma imagem JPEG, PNG ou WEBP, ou um vídeo MP4, MOV ou WEBM.");
+                    "A mídia deve ser uma imagem JPEG, PNG ou WEBP, um áudio MP4 ou WEBM, " +
+                    "ou um vídeo MP4, MOV ou WEBM.");
             }
 
             if (arquivo.TamanhoEmBytes <= 0)
@@ -271,15 +283,26 @@ public sealed class CrieMemoriaDoEncontro(
         ArquivoDaMemoriaComando arquivo,
         CancellationToken cancellationToken)
     {
-        return arquivo.TipoDeConteudo.StartsWith("video/", StringComparison.OrdinalIgnoreCase)
-            ? ValidadorDeVideo.ValideAsync(
-                arquivo.Conteudo,
-                arquivo.TipoDeConteudo,
-                cancellationToken)
-            : ValidadorDeImagem.ValideAsync(
+        if (arquivo.TipoDeConteudo.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+        {
+            return ValidadorDeAudio.ValideAsync(
                 arquivo.Conteudo,
                 arquivo.TipoDeConteudo,
                 cancellationToken);
+        }
+
+        if (arquivo.TipoDeConteudo.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+        {
+            return ValidadorDeVideo.ValideAsync(
+                arquivo.Conteudo,
+                arquivo.TipoDeConteudo,
+                cancellationToken);
+        }
+
+        return ValidadorDeImagem.ValideAsync(
+            arquivo.Conteudo,
+            arquivo.TipoDeConteudo,
+            cancellationToken);
     }
 
     private static bool ArquivosCorrespondem(

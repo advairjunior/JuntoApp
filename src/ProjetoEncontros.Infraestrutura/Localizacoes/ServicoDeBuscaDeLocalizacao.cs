@@ -19,7 +19,8 @@ public sealed class ServicoDeBuscaDeLocalizacao : IServicoDeBuscaDeLocalizacao, 
             BaseAddress = new("https://nominatim.openstreetmap.org"),
             Timeout = TimeSpan.FromSeconds(8)
         };
-        _cliente.DefaultRequestHeaders.UserAgent.ParseAdd("Junto-Projeto-Encontros/1.0");
+        _cliente.DefaultRequestHeaders.UserAgent.ParseAdd(
+            "Junto-Projeto-Encontros/1.0 (+https://github.com/advairjunior/JuntoApp)");
         _cliente.DefaultRequestHeaders.AcceptLanguage.ParseAdd("pt-BR");
     }
 
@@ -31,23 +32,9 @@ public sealed class ServicoDeBuscaDeLocalizacao : IServicoDeBuscaDeLocalizacao, 
 
         try
         {
-            TimeSpan tempoDesdeUltimaConsulta = DateTimeOffset.UtcNow - _ultimaConsultaEm;
-            TimeSpan esperaNecessaria = TimeSpan.FromSeconds(1) - tempoDesdeUltimaConsulta;
-
-            if (esperaNecessaria > TimeSpan.Zero)
-            {
-                await Task.Delay(esperaNecessaria, cancellationToken);
-            }
-
-            string termoCodificado = Uri.EscapeDataString(termo);
-            string endereco = $"/search?q={termoCodificado}&format=jsonv2&addressdetails=1&limit=5";
-            List<ResultadoDoNominatim>? resultados = await _cliente
-                .GetFromJsonAsync<List<ResultadoDoNominatim>>(endereco, cancellationToken);
-
-            if (resultados is null)
-            {
-                return [];
-            }
+            List<ResultadoDoNominatim> resultados = await ConsulteAsync(
+                $"{termo}, Goiânia, Goiás, Brasil",
+                cancellationToken);
 
             return [.. resultados
                 .Select(ConvertaResultado)
@@ -58,6 +45,36 @@ public sealed class ServicoDeBuscaDeLocalizacao : IServicoDeBuscaDeLocalizacao, 
         {
             _ultimaConsultaEm = DateTimeOffset.UtcNow;
             LimitadorDeConsultas.Release();
+        }
+    }
+
+    private async Task<List<ResultadoDoNominatim>> ConsulteAsync(
+        string termo,
+        CancellationToken cancellationToken)
+    {
+        TimeSpan tempoDesdeUltimaConsulta = DateTimeOffset.UtcNow - _ultimaConsultaEm;
+        TimeSpan esperaNecessaria = TimeSpan.FromSeconds(1) - tempoDesdeUltimaConsulta;
+
+        if (esperaNecessaria > TimeSpan.Zero)
+        {
+            await Task.Delay(esperaNecessaria, cancellationToken);
+        }
+
+        string termoCodificado = Uri.EscapeDataString(termo);
+        string endereco =
+            $"/search?q={termoCodificado}&format=jsonv2&addressdetails=1" +
+            "&accept-language=pt-BR&countrycodes=br&layer=address,poi&dedupe=1&limit=10" +
+            "&viewbox=-49.55,-16.45,-49.00,-16.95&bounded=1";
+
+        try
+        {
+            return await _cliente.GetFromJsonAsync<List<ResultadoDoNominatim>>(
+                endereco,
+                cancellationToken) ?? [];
+        }
+        finally
+        {
+            _ultimaConsultaEm = DateTimeOffset.UtcNow;
         }
     }
 

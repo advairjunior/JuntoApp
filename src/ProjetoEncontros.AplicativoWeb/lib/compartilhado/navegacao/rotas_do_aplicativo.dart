@@ -36,36 +36,10 @@ final provedorDasRotas = Provider<GoRouter>((Ref referencia) {
     refreshListenable: notificador,
     redirect: (BuildContext context, GoRouterState estadoDaRota) {
       EstadoDaSessao sessao = referencia.read(provedorDoControladorDeSessao);
-      String caminho = estadoDaRota.uri.path;
-      bool rotaEhPublica = caminho == '/entrada' || caminho == '/cadastro';
-      bool rotaEhInicializacao = caminho == '/inicializacao';
-
-      if (sessao.situacao == SituacaoDaSessao.restaurando) {
-        return rotaEhInicializacao ? null : '/inicializacao';
-      }
-
-      if (!sessao.usuarioEstaAutenticado) {
-        if (rotaEhPublica) {
-          return null;
-        }
-
-        String retorno = Uri.encodeComponent(estadoDaRota.uri.toString());
-        return '/entrada?retorno=$retorno';
-      }
-
-      if (rotaEhPublica || rotaEhInicializacao) {
-        String? retorno = estadoDaRota.uri.queryParameters['retorno'];
-
-        if (retorno != null &&
-            retorno.startsWith('/') &&
-            !retorno.startsWith('/entrada')) {
-          return retorno;
-        }
-
-        return '/inicio';
-      }
-
-      return null;
+      return redirecioneRota(
+        sessao: sessao,
+        enderecoDaRota: estadoDaRota.uri,
+      );
     },
     routes: <RouteBase>[
       GoRoute(
@@ -209,6 +183,79 @@ final provedorDasRotas = Provider<GoRouter>((Ref referencia) {
     ],
   );
 });
+
+String? redirecioneRota({
+  required EstadoDaSessao sessao,
+  required Uri enderecoDaRota,
+}) {
+  String caminho = enderecoDaRota.path;
+  bool rotaEhPublica = caminho == '/entrada' || caminho == '/cadastro';
+  bool rotaEhInicializacao = caminho == '/inicializacao';
+  String? retorno = _obtenhaRetornoValido(enderecoDaRota);
+
+  if (sessao.situacao == SituacaoDaSessao.restaurando) {
+    if (rotaEhInicializacao) {
+      return null;
+    }
+
+    if (rotaEhPublica) {
+      return retorno == null
+          ? '/inicializacao'
+          : Uri(
+              path: '/inicializacao',
+              queryParameters: <String, String>{
+                'retorno': retorno,
+              },
+            ).toString();
+    }
+
+    return Uri(
+      path: '/inicializacao',
+      queryParameters: <String, String>{
+        'retorno': enderecoDaRota.toString(),
+      },
+    ).toString();
+  }
+
+  if (!sessao.usuarioEstaAutenticado) {
+    if (rotaEhPublica) {
+      return null;
+    }
+
+    String? destinoAposEntrada =
+        rotaEhInicializacao ? retorno : enderecoDaRota.toString();
+
+    if (!_retornoEhValido(destinoAposEntrada)) {
+      return '/entrada';
+    }
+
+    return Uri(
+      path: '/entrada',
+      queryParameters: <String, String>{
+        'retorno': destinoAposEntrada!,
+      },
+    ).toString();
+  }
+
+  if (rotaEhPublica || rotaEhInicializacao) {
+    return retorno ?? '/inicio';
+  }
+
+  return null;
+}
+
+String? _obtenhaRetornoValido(Uri enderecoDaRota) {
+  String? retorno = enderecoDaRota.queryParameters['retorno'];
+  return _retornoEhValido(retorno) ? retorno : null;
+}
+
+bool _retornoEhValido(String? retorno) {
+  return retorno != null &&
+      retorno.startsWith('/') &&
+      !retorno.startsWith('/entrada') &&
+      !retorno.startsWith('/cadastro') &&
+      !retorno.startsWith('/inicializacao');
+}
 
 class NotificadorDeRotas extends ChangeNotifier {
   void notifique() {

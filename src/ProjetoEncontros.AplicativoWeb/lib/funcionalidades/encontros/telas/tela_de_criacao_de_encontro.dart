@@ -207,7 +207,6 @@ class _EstadoDaTelaDeCriacaoDeEncontro
                             labelText: 'Título do encontro',
                             prefixIcon: Icon(Icons.celebration_outlined),
                           ),
-                          onChanged: _aoAlterarDescricaoDoLocal,
                           validator: (String? titulo) {
                             if (titulo == null || titulo.trim().isEmpty) {
                               return 'Informe um título para o encontro.';
@@ -260,6 +259,7 @@ class _EstadoDaTelaDeCriacaoDeEncontro
                             labelText: 'Nome ou endereço do local',
                             prefixIcon: Icon(Icons.location_on_outlined),
                           ),
+                          onChanged: _aoAlterarDescricaoDoLocal,
                           validator: (String? local) {
                             if (_latitude != null &&
                                 (local == null || local.trim().isEmpty)) {

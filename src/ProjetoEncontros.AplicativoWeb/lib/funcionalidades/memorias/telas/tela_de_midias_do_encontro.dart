@@ -50,7 +50,9 @@ class TelaDeMidiasDoEncontro extends ConsumerWidget {
             data: (List<MemoriaDoEncontro> itens) {
               List<MemoriaDoEncontro> publicacoes = itens
                   .where(
-                    (MemoriaDoEncontro memoria) => memoria.midias.isNotEmpty,
+                    (MemoriaDoEncontro memoria) =>
+                        memoria.midias.isNotEmpty &&
+                        _ehMidiaVisual(memoria.midias.first),
                   )
                   .toList();
 
@@ -113,6 +115,12 @@ class TelaDeMidiasDoEncontro extends ConsumerWidget {
     }
 
     return 6;
+  }
+
+  bool _ehMidiaVisual(MidiaDaMemoria midia) {
+    String tipoDeConteudo = midia.tipoDeConteudo.toLowerCase();
+    return tipoDeConteudo.startsWith('image/') ||
+        tipoDeConteudo.startsWith('video/');
   }
 }
 
