@@ -9,4 +9,13 @@ public interface IConsultaDePessoasFrequentes
         DateTimeOffset agora,
         int limite,
         CancellationToken cancellationToken);
+
+    Task<HistoricoComPessoaResposta?> ObtenhaHistoricoAsync(
+        Guid identificadorDoUsuario,
+        Guid identificadorDaPessoa,
+        DateTimeOffset agora,
+        int pagina,
+        int tamanho,
+        int limiteDeMemorias,
+        CancellationToken cancellationToken);
 }

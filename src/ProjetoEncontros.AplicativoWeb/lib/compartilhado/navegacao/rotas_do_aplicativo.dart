@@ -18,6 +18,8 @@ import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/telas/
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/notificacoes/telas/tela_de_notificacoes.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/notificacoes/telas/tela_de_preferencias_de_notificacao.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/perfil/telas/tela_de_perfil.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/pessoas_frequentes/telas/tela_de_pessoas.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/pessoas_frequentes/telas/tela_de_historico_com_pessoa.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/telas/tela_de_momentos_do_encontro.dart';
 
 final provedorDasRotas = Provider<GoRouter>((Ref referencia) {
@@ -71,6 +73,15 @@ final provedorDasRotas = Provider<GoRouter>((Ref referencia) {
         builder: (BuildContext context, GoRouterState estado) {
           return TelaDeConvitePorLink(
             token: estado.pathParameters['token']!,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/pessoas/:identificadorDaPessoa',
+        builder: (BuildContext context, GoRouterState estado) {
+          return TelaDeHistoricoComPessoa(
+            identificadorDaPessoa:
+                estado.pathParameters['identificadorDaPessoa']!,
           );
         },
       ),
@@ -164,6 +175,12 @@ final provedorDasRotas = Provider<GoRouter>((Ref referencia) {
             path: '/inicio',
             builder: (BuildContext context, GoRouterState estado) {
               return const TelaInicial();
+            },
+          ),
+          GoRoute(
+            path: '/pessoas',
+            builder: (BuildContext context, GoRouterState estado) {
+              return const TelaDePessoas();
             },
           ),
           GoRoute(

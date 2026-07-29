@@ -6,9 +6,9 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/tipografia_d
 abstract final class TemaDoAplicativo {
   static ThemeData get escuro {
     ColorScheme esquemaDeCores = const ColorScheme.dark(
-      primary: CoresDoAplicativo.verdeDestaque,
+      primary: CoresDoAplicativo.textoPrincipal,
       onPrimary: CoresDoAplicativo.fundoPrincipal,
-      secondary: CoresDoAplicativo.ambar,
+      secondary: CoresDoAplicativo.azulInteracao,
       onSecondary: CoresDoAplicativo.fundoPrincipal,
       error: CoresDoAplicativo.perigo,
       onError: CoresDoAplicativo.textoPrincipal,
@@ -29,7 +29,10 @@ abstract final class TemaDoAplicativo {
       scaffoldBackgroundColor: CoresDoAplicativo.fundoPrincipal,
       canvasColor: CoresDoAplicativo.fundoSecundario,
       dividerColor: CoresDoAplicativo.bordaDiscreta,
-      splashFactory: InkRipple.splashFactory,
+      splashFactory: NoSplash.splashFactory,
+      hoverColor: CoresDoAplicativo.fundoDoCartaoSuave,
+      focusColor: CoresDoAplicativo.fundoDaInteracao,
+      highlightColor: CoresDoAplicativo.fundoDoCartaoSuave,
       textTheme: const TextTheme(
         headlineLarge: TipografiaDoAplicativo.tituloGrande,
         headlineMedium: TipografiaDoAplicativo.tituloMedio,
@@ -75,13 +78,13 @@ abstract final class TemaDoAplicativo {
         hintStyle: TipografiaDoAplicativo.corpoSecundario.copyWith(
           color: CoresDoAplicativo.textoTerciario,
         ),
-        prefixIconColor: CoresDoAplicativo.verdeDestaque,
+        prefixIconColor: CoresDoAplicativo.textoSecundario,
         suffixIconColor: CoresDoAplicativo.textoSecundario,
         border: bordaDoCampo,
         enabledBorder: bordaDoCampo,
         focusedBorder: bordaDoCampo.copyWith(
           borderSide: const BorderSide(
-            color: CoresDoAplicativo.verdeDestaque,
+            color: CoresDoAplicativo.azulInteracao,
             width: 1.4,
           ),
         ),
@@ -98,7 +101,7 @@ abstract final class TemaDoAplicativo {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
-          backgroundColor: CoresDoAplicativo.verdeDestaque,
+          backgroundColor: CoresDoAplicativo.textoPrincipal,
           foregroundColor: CoresDoAplicativo.fundoPrincipal,
           disabledBackgroundColor: CoresDoAplicativo.fundoDoCartaoSuave,
           shape: RoundedRectangleBorder(
@@ -120,7 +123,7 @@ abstract final class TemaDoAplicativo {
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: CoresDoAplicativo.verdeDestaque,
+          foregroundColor: CoresDoAplicativo.azulInteracao,
           textStyle: TipografiaDoAplicativo.acao,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(RaiosDoAplicativo.pequeno),
@@ -131,11 +134,12 @@ abstract final class TemaDoAplicativo {
         style: IconButton.styleFrom(
           foregroundColor: CoresDoAplicativo.textoSecundario,
           highlightColor: CoresDoAplicativo.fundoDoCartaoSuave,
+          minimumSize: const Size.square(44),
         ),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: CoresDoAplicativo.fundoDoCartao,
-        selectedColor: CoresDoAplicativo.verdeEscuro,
+        selectedColor: CoresDoAplicativo.fundoDaInteracao,
         side: const BorderSide(color: CoresDoAplicativo.bordaDiscreta),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(RaiosDoAplicativo.pilula),
@@ -156,7 +160,7 @@ abstract final class TemaDoAplicativo {
             return IconThemeData(
               size: 22,
               color: estados.contains(WidgetState.selected)
-                  ? CoresDoAplicativo.verdeDestaque
+                  ? CoresDoAplicativo.textoPrincipal
                   : CoresDoAplicativo.textoTerciario,
             );
           },
@@ -165,7 +169,7 @@ abstract final class TemaDoAplicativo {
           (Set<WidgetState> estados) {
             return TipografiaDoAplicativo.legenda.copyWith(
               color: estados.contains(WidgetState.selected)
-                  ? CoresDoAplicativo.verdeDestaque
+                  ? CoresDoAplicativo.textoPrincipal
                   : CoresDoAplicativo.textoTerciario,
               fontWeight: estados.contains(WidgetState.selected)
                   ? FontWeight.w600
@@ -204,8 +208,54 @@ abstract final class TemaDoAplicativo {
         ),
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: CoresDoAplicativo.verdeDestaque,
+        color: CoresDoAplicativo.azulInteracao,
         linearTrackColor: CoresDoAplicativo.fundoDoCartaoSuave,
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith<Color>(
+          (Set<WidgetState> estados) => estados.contains(WidgetState.selected)
+              ? CoresDoAplicativo.textoPrincipal
+              : CoresDoAplicativo.textoTerciario,
+        ),
+        trackColor: WidgetStateProperty.resolveWith<Color>(
+          (Set<WidgetState> estados) => estados.contains(WidgetState.selected)
+              ? CoresDoAplicativo.azulInteracaoForte
+              : CoresDoAplicativo.fundoDoCartaoSuave,
+        ),
+        trackOutlineColor: const WidgetStatePropertyAll<Color>(
+          CoresDoAplicativo.bordaSuave,
+        ),
+      ),
+      checkboxTheme: CheckboxThemeData(
+        fillColor: WidgetStateProperty.resolveWith<Color>(
+          (Set<WidgetState> estados) => estados.contains(WidgetState.selected)
+              ? CoresDoAplicativo.azulInteracaoForte
+              : CoresDoAplicativo.transparente,
+        ),
+        checkColor: const WidgetStatePropertyAll<Color>(
+          CoresDoAplicativo.textoPrincipal,
+        ),
+        side: const BorderSide(color: CoresDoAplicativo.bordaSuave),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(RaiosDoAplicativo.pequeno / 2),
+        ),
+      ),
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith<Color>(
+          (Set<WidgetState> estados) => estados.contains(WidgetState.selected)
+              ? CoresDoAplicativo.azulInteracao
+              : CoresDoAplicativo.textoTerciario,
+        ),
+      ),
+      listTileTheme: const ListTileThemeData(
+        iconColor: CoresDoAplicativo.textoSecundario,
+        textColor: CoresDoAplicativo.textoPrincipal,
+        minTileHeight: 48,
+      ),
+      dividerTheme: const DividerThemeData(
+        color: CoresDoAplicativo.bordaDiscreta,
+        thickness: 1,
+        space: 1,
       ),
     );
   }

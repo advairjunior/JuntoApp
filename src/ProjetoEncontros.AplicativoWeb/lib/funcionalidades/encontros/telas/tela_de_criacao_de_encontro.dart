@@ -255,9 +255,14 @@ class _EstadoDaTelaDeCriacaoDeEncontro
                           controller: _controladorDoLocal,
                           maxLength: 200,
                           textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(
-                            labelText: 'Nome ou endereço do local',
-                            prefixIcon: Icon(Icons.location_on_outlined),
+                          decoration: InputDecoration(
+                            labelText: _latitude != null && _longitude != null
+                                ? 'Nome exibido do local'
+                                : 'Nome ou endereço do local',
+                            helperText: _latitude != null && _longitude != null
+                                ? 'Ex.: Casa da tia Sonia'
+                                : null,
+                            prefixIcon: const Icon(Icons.location_on_outlined),
                           ),
                           onChanged: _aoAlterarDescricaoDoLocal,
                           validator: (String? local) {
@@ -654,12 +659,9 @@ class _EstadoDaTelaDeCriacaoDeEncontro
     });
   }
 
-  void _aoAlterarDescricaoDoLocal(String valor) {
+  void _aoAlterarDescricaoDoLocal(String descricao) {
     setState(() {
-      if (_latitude != null || _longitude != null) {
-        _latitude = null;
-        _longitude = null;
-      }
+      _mensagemDaLocalizacao = null;
     });
   }
 

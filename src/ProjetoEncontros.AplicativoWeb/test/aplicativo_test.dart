@@ -39,6 +39,7 @@ import 'package:projeto_encontros_aplicativo_web/funcionalidades/notificacoes/mo
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/notificacoes/modelos/preferencia_de_notificacao.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/perfil/dados/repositorio_do_perfil.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/pessoas_frequentes/dados/repositorio_de_pessoas_frequentes.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/pessoas_frequentes/modelos/historico_com_pessoa.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/pessoas_frequentes/modelos/pessoa_frequente.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/dados/repositorio_de_publicacoes_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/modelos/publicacao_do_encontro.dart';
@@ -116,6 +117,97 @@ void main() {
     expect(find.byKey(const Key('foto-do-usuario-no-perfil')), findsOneWidget);
     expect(find.text('Pessoa Teste'), findsOneWidget);
     expect(find.text('pessoa@email.com'), findsOneWidget);
+  });
+
+  testWidgets('deve listar, buscar e abrir uma pessoa conhecida', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDePessoasFrequentesFalso pessoasFrequentes =
+        RepositorioDePessoasFrequentesFalso(
+      pessoas: <PessoaFrequente>[
+        PessoaFrequente(
+          identificadorDoUsuario: 'usuario-ana',
+          nome: 'Ana Souza',
+          quantidadeDeEncontrosEmComum: 3,
+          ultimoEncontroEm: DateTime(2026, 7, 9),
+        ),
+        PessoaFrequente(
+          identificadorDoUsuario: 'usuario-caio',
+          nome: 'Caio Lima',
+          quantidadeDeEncontrosEmComum: 2,
+          ultimoEncontroEm: DateTime(2026, 7, 8),
+        ),
+      ],
+      historico: HistoricoComPessoa(
+        identificadorDaPessoa: 'usuario-ana',
+        nome: 'Ana Souza',
+        quantidadeDeEncontrosEmComum: 3,
+        quantidadeDeEncontrosRealizadosJuntos: 1,
+        ultimoEncontroEm: DateTime(2026, 7, 9),
+        primeiroEncontroEm: DateTime(2026, 7, 9),
+        proximosEncontros: const <ProximoEncontroComPessoa>[],
+        temMaisProximosEncontros: false,
+        estatisticas: const EstatisticasComPessoa(
+          quantidadeDeEncontrosRealizadosJuntos: 1,
+          quantidadeDeEncontrosJuntosNesteAno: 1,
+        ),
+        historico: PaginaDoHistoricoComPessoa(
+          pagina: 1,
+          tamanho: 10,
+          quantidadeTotal: 1,
+          temProximaPagina: false,
+          itens: <EncontroDoHistoricoComPessoa>[
+            EncontroDoHistoricoComPessoa(
+              identificadorDoEncontro: 'encontro-um',
+              titulo: 'Café com Ana',
+              inicioEm: DateTime(2026, 7, 9),
+              tipo: 'Café',
+            ),
+          ],
+        ),
+        memorias: const <MemoriaDoEncontro>[],
+        temMaisMemorias: false,
+      ),
+    );
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDePessoasFrequentes: pessoasFrequentes,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Pessoas'));
+    await testador.pumpAndSettle();
+
+    expect(find.byKey(const Key('lista-de-pessoas')), findsOneWidget);
+    expect(find.text('Ana Souza'), findsOneWidget);
+    expect(find.textContaining('3 encontros em comum'), findsOneWidget);
+    expect(find.text('Última vez há 20 dias'), findsOneWidget);
+    expect(find.text('Caio Lima'), findsOneWidget);
+
+    await testador.enterText(
+      find.byKey(const Key('buscar-pessoa')),
+      'Ana',
+    );
+    await testador.pumpAndSettle();
+
+    expect(find.text('Ana Souza'), findsOneWidget);
+    expect(find.text('Caio Lima'), findsNothing);
+
+    await testador.tap(find.byKey(const Key('abrir-pessoa-usuario-ana')));
+    await testador.pumpAndSettle();
+
+    expect(find.text('Ana Souza'), findsOneWidget);
+    expect(find.textContaining('3 encontros em comum'), findsOneWidget);
+    expect(find.text('Café com Ana'), findsOneWidget);
+    expect(
+      find.textContaining('costumam acontecer a cada'),
+      findsNothing,
+    );
+    expect(find.text('Convidar para outro encontro'), findsOneWidget);
   });
 
   testWidgets('deve alterar o nome exibido no perfil', (
@@ -532,7 +624,6 @@ void main() {
       find.widgetWithText(TextFormField, 'Nome ou endereço do local'),
       'Casa da Bia',
     );
-    await testador.pump();
     OutlinedButton botaoDeBuscaDoLocal = testador.widget<OutlinedButton>(
       find.byKey(const Key('selecionar-ponto-no-mapa')),
     );
@@ -1159,7 +1250,7 @@ void main() {
     await testador.pumpAndSettle();
 
     expect(find.text('Bia Souza'), findsWidgets);
-    expect(find.text('3 encontros juntos'), findsOneWidget);
+    expect(find.text('3 encontros em comum'), findsOneWidget);
     expect(find.text('Último encontro em 20/07/2026'), findsOneWidget);
 
     await testador.tap(
@@ -1533,7 +1624,10 @@ void main() {
 
     expect(find.byKey(const Key('previa-da-midia-0')), findsOneWidget);
     expect(find.text('1/2'), findsOneWidget);
-    expect(seletorDeImagem.ultimaOrigem, EnumeradorDeOrigemDaImagem.camera);
+    expect(
+      seletorDeImagem.ultimaOrigem,
+      EnumeradorDeOrigemDaImagem.cameraFrontal,
+    );
 
     await testador.enterText(
       find.byKey(const Key('legenda-da-publicacao')),
@@ -1552,6 +1646,22 @@ void main() {
     await testador.pumpAndSettle();
     expect(find.text('Sua foto'), findsOneWidget);
 
+    await testador.drag(
+      find.byKey(const Key('visualizador-da-imagem-do-feed')),
+      const Offset(0, 70),
+    );
+    await testador.pumpAndSettle();
+    expect(find.text('Sua foto'), findsOneWidget);
+
+    await testador.drag(
+      find.byKey(const Key('visualizador-da-imagem-do-feed')),
+      const Offset(0, 150),
+    );
+    await testador.pumpAndSettle();
+    expect(find.text('Sua foto'), findsNothing);
+
+    await testador.tap(find.byKey(const Key('abrir-midia-memoria-nova')));
+    await testador.pumpAndSettle();
     await testador.tap(find.byKey(const Key('remover-memoria')));
     await testador.pumpAndSettle();
     await testador.tap(
@@ -1799,11 +1909,13 @@ void main() {
         RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
     RepositorioDeMemoriasDoEncontroFalso repositorioDeMemorias =
         RepositorioDeMemoriasDoEncontroFalso(comMemoriaInicial: true);
+    SeletorDeImagemFalso seletorDeImagem = SeletorDeImagemFalso();
 
     await testador.pumpWidget(
       _crieAplicativo(
         repositorio,
         repositorioDeMemorias: repositorioDeMemorias,
+        seletorDeImagem: seletorDeImagem,
       ),
     );
     await testador.pumpAndSettle();
@@ -1834,6 +1946,29 @@ void main() {
     SliverGridDelegateWithFixedCrossAxisCount configuracaoDaGrade =
         grade.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
     expect(configuracaoDaGrade.crossAxisCount, 3);
+
+    await testador.tap(
+      find.byKey(const Key('adicionar-publicacao-nas-memorias')),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(
+      find.byKey(const Key('escolher-foto-da-galeria')),
+    );
+    await testador.pumpAndSettle();
+    await testador.enterText(
+      find.byKey(const Key('legenda-da-publicacao')),
+      'Fotos publicadas depois do encontro.',
+    );
+    await testador.tap(
+      find.byKey(const Key('confirmar-nova-publicacao')),
+    );
+    await testador.pumpAndSettle();
+
+    expect(repositorioDeMemorias.quantidadeDePublicacoes, 1);
+    expect(
+      repositorioDeMemorias.ultimaLegenda,
+      'Fotos publicadas depois do encontro.',
+    );
 
     await testador.tap(find.byKey(const Key('midia-midia-inicial')));
     await testador.pumpAndSettle();
@@ -3373,13 +3508,38 @@ class RepositorioDePessoasFrequentesFalso
     implements IRepositorioDePessoasFrequentes {
   RepositorioDePessoasFrequentesFalso({
     this.pessoas = const <PessoaFrequente>[],
+    this.historico,
+    this.historicosPorPagina = const <int, HistoricoComPessoa>{},
   });
 
   final List<PessoaFrequente> pessoas;
+  final HistoricoComPessoa? historico;
+  final Map<int, HistoricoComPessoa> historicosPorPagina;
+  final List<int> paginasConsultadas = <int>[];
 
   @override
   Future<List<PessoaFrequente>> listeAsync() async {
     return pessoas;
+  }
+
+  @override
+  Future<HistoricoComPessoa> obtenhaHistoricoAsync({
+    required String identificadorDaPessoa,
+    int pagina = 1,
+    int tamanho = 10,
+    int limiteDeMemorias = 6,
+  }) async {
+    paginasConsultadas.add(pagina);
+    HistoricoComPessoa? resultado = historicosPorPagina[pagina] ?? historico;
+
+    if (resultado == null) {
+      throw const ExcecaoDaApi(
+        mensagem: 'Histórico não encontrado.',
+        codigoHttp: 404,
+      );
+    }
+
+    return resultado;
   }
 }
 

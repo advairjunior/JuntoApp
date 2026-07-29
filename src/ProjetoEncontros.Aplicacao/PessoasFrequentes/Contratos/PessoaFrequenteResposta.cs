@@ -5,4 +5,5 @@ public sealed record PessoaFrequenteResposta(
     string Nome,
     string? UrlDaFotoDePerfil,
     int QuantidadeDeEncontrosEmComum,
-    DateTimeOffset UltimoEncontroEm);
+    DateTimeOffset UltimoEncontroEm,
+    DateTimeOffset? ProximoEncontroEm);
