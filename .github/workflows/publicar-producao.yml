@@ -1,0 +1,75 @@
+name: Validar e publicar em producao
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    name: Validar aplicacao
+    if: github.event.action != 'closed' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Obter codigo
+        uses: actions/checkout@v6
+
+      - name: Preparar .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.301
+
+      - name: Restaurar testes unitarios
+        run: dotnet restore tests/ProjetoEncontros.TestesUnidade/ProjetoEncontros.TestesUnidade.csproj
+
+      - name: Executar testes unitarios
+        run: >-
+          dotnet test
+          tests/ProjetoEncontros.TestesUnidade/ProjetoEncontros.TestesUnidade.csproj
+          --configuration Release
+          --no-restore
+
+      - name: Validar imagem de producao
+        run: docker build --tag juntoapp-validacao:${{ github.sha }} .
+
+  publicar:
+    name: Publicar no Render
+    needs:
+      - validar
+    if: >-
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      needs.validar.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: producao
+    concurrency:
+      group: producao
+      cancel-in-progress: false
+
+    steps:
+      - name: Acionar deploy do Render
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::error::O segredo RENDER_DEPLOY_HOOK_URL nao foi configurado."
+            exit 1
+          fi
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --request POST \
+            "$RENDER_DEPLOY_HOOK_URL"
