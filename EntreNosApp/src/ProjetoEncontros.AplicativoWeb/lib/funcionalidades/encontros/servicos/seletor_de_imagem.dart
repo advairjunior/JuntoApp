@@ -3,8 +3,13 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/servicos/corretor_de_selfie.dart';
 
-enum EnumeradorDeOrigemDaImagem { camera, galeria }
+enum EnumeradorDeOrigemDaImagem {
+  cameraFrontal,
+  cameraTraseira,
+  galeria,
+}
 
 class ImagemSelecionada {
   const ImagemSelecionada({
@@ -112,10 +117,13 @@ class SeletorDeImagem
     EnumeradorDeOrigemDaImagem origem,
   ) async {
     try {
+      bool ehCamera = origem != EnumeradorDeOrigemDaImagem.galeria;
       XFile? arquivo = await _seletorNativo.pickImage(
-        source: origem == EnumeradorDeOrigemDaImagem.camera
-            ? ImageSource.camera
-            : ImageSource.gallery,
+        source: ehCamera ? ImageSource.camera : ImageSource.gallery,
+        preferredCameraDevice:
+            origem == EnumeradorDeOrigemDaImagem.cameraFrontal
+                ? CameraDevice.front
+                : CameraDevice.rear,
       );
 
       if (arquivo == null) {
@@ -123,10 +131,19 @@ class SeletorDeImagem
       }
 
       Uint8List conteudo = await arquivo.readAsBytes();
+      String tipoDeConteudo =
+          arquivo.mimeType ?? _obtenhaTipoDeConteudo(arquivo.name);
+
+      if (origem == EnumeradorDeOrigemDaImagem.cameraFrontal) {
+        conteudo = await corrijaEspelhamentoDaSelfieAsync(
+          conteudo,
+          tipoDeConteudo,
+        );
+      }
+
       return ImagemSelecionada(
         nome: arquivo.name,
-        tipoDeConteudo:
-            arquivo.mimeType ?? _obtenhaTipoDeConteudo(arquivo.name),
+        tipoDeConteudo: tipoDeConteudo,
         conteudo: conteudo,
       );
     } catch (_) {
@@ -138,7 +155,7 @@ class SeletorDeImagem
   Future<List<MidiaSelecionada>> selecioneMidiasPorOrigemAsync(
     EnumeradorDeOrigemDaImagem origem,
   ) async {
-    if (origem == EnumeradorDeOrigemDaImagem.camera) {
+    if (origem != EnumeradorDeOrigemDaImagem.galeria) {
       ImagemSelecionada? imagem = await selecionePorOrigemAsync(origem);
       return imagem == null
           ? <MidiaSelecionada>[]

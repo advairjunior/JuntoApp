@@ -5,16 +5,22 @@ import 'package:intl/intl.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/cartao_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/estado_vazio.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/configuracao/configuracao_do_ambiente.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/erros/excecao_da_api.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/foto_de_perfil.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/imagem_privada.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/midias/video_privado.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/cores_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos_do_aplicativo.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/componentes/folha_de_origem_da_imagem.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/estado/controlador_do_detalhe_do_encontro.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/estado/estado_do_detalhe_do_encontro.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/servicos/seletor_de_imagem.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/dados/repositorio_de_memorias_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/modelos/memoria_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/modelos/midia_da_memoria.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/telas/tela_de_momentos_do_encontro.dart';
 
-class TelaDeMidiasDoEncontro extends ConsumerWidget {
+class TelaDeMidiasDoEncontro extends ConsumerStatefulWidget {
   const TelaDeMidiasDoEncontro({
     required this.identificadorDoEncontro,
     super.key,
@@ -23,10 +29,27 @@ class TelaDeMidiasDoEncontro extends ConsumerWidget {
   final String identificadorDoEncontro;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TelaDeMidiasDoEncontro> createState() =>
+      _EstadoDaTelaDeMidiasDoEncontro();
+}
+
+class _EstadoDaTelaDeMidiasDoEncontro
+    extends ConsumerState<TelaDeMidiasDoEncontro> {
+  bool _estaSelecionandoMidias = false;
+
+  @override
+  Widget build(BuildContext context) {
     AsyncValue<List<MemoriaDoEncontro>> memorias = ref.watch(
-      provedorDasMemoriasDoEncontro(identificadorDoEncontro),
+      provedorDasMemoriasDoEncontro(widget.identificadorDoEncontro),
     );
+    EstadoDoDetalheDoEncontro detalhe = ref.watch(
+      provedorDoControladorDoDetalheDoEncontro(
+        widget.identificadorDoEncontro,
+      ),
+    );
+    bool podeAdicionar =
+        detalhe.situacao == SituacaoDoDetalheDoEncontro.carregado &&
+            detalhe.encontro!.situacao.toLowerCase() != 'cancelado';
 
     return Scaffold(
       backgroundColor: CoresDoAplicativo.fundoPrincipal,
@@ -37,6 +60,21 @@ class TelaDeMidiasDoEncontro extends ConsumerWidget {
           onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_ios_new_rounded),
         ),
+        actions: <Widget>[
+          if (podeAdicionar)
+            IconButton(
+              key: const Key('adicionar-publicacao-nas-memorias'),
+              tooltip: 'Adicionar publicação',
+              onPressed:
+                  _estaSelecionandoMidias ? null : _adicionePublicacaoAsync,
+              icon: _estaSelecionandoMidias
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_photo_alternate_outlined),
+            ),
+        ],
       ),
       body: _EstruturaDaGaleria(
         filho: SafeArea(
@@ -44,7 +82,7 @@ class TelaDeMidiasDoEncontro extends ConsumerWidget {
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (_, __) => _ErroDaGaleria(
               aoTentarNovamente: () => ref.invalidate(
-                provedorDasMemoriasDoEncontro(identificadorDoEncontro),
+                provedorDasMemoriasDoEncontro(widget.identificadorDoEncontro),
               ),
             ),
             data: (List<MemoriaDoEncontro> itens) {
@@ -66,12 +104,12 @@ class TelaDeMidiasDoEncontro extends ConsumerWidget {
                     onRefresh: () async {
                       ref.invalidate(
                         provedorDasMemoriasDoEncontro(
-                          identificadorDoEncontro,
+                          widget.identificadorDoEncontro,
                         ),
                       );
                       await ref.read(
                         provedorDasMemoriasDoEncontro(
-                          identificadorDoEncontro,
+                          widget.identificadorDoEncontro,
                         ).future,
                       );
                     },
@@ -121,6 +159,104 @@ class TelaDeMidiasDoEncontro extends ConsumerWidget {
     String tipoDeConteudo = midia.tipoDeConteudo.toLowerCase();
     return tipoDeConteudo.startsWith('image/') ||
         tipoDeConteudo.startsWith('video/');
+  }
+
+  Future<void> _adicionePublicacaoAsync() async {
+    EnumeradorDeOrigemDaImagem? origem = await escolhaOrigemDaImagemAsync(
+      context,
+      titulo: 'Adicionar às memórias',
+    );
+
+    if (origem == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _estaSelecionandoMidias = true;
+    });
+
+    try {
+      List<MidiaSelecionada> midias = await ref
+          .read(provedorDoSeletorDeImagem)
+          .selecioneMidiasPorOrigemAsync(origem);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _estaSelecionandoMidias = false;
+      });
+
+      if (midias.isEmpty) {
+        return;
+      }
+
+      if (midias.length > 10) {
+        _mostreAviso('Selecione no máximo 10 mídias por publicação.');
+        return;
+      }
+
+      if (midias.any(
+        (MidiaSelecionada midia) =>
+            midia.conteudo.lengthInBytes > 10 * 1024 * 1024,
+      )) {
+        _mostreAviso('Cada foto ou vídeo pode ter no máximo 10 MB.');
+        return;
+      }
+
+      bool? publicou = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return DialogoDeNovaPublicacao(
+            midias: midias,
+            legendaInicial: '',
+            aoPublicar: (String legenda) =>
+                _publiqueMidiasAsync(midias, legenda),
+          );
+        },
+      );
+
+      if (publicou == true && mounted) {
+        ref.invalidate(
+          provedorDasMemoriasDoEncontro(widget.identificadorDoEncontro),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _estaSelecionandoMidias = false;
+        });
+      }
+    }
+  }
+
+  Future<bool> _publiqueMidiasAsync(
+    List<MidiaSelecionada> midias,
+    String legenda,
+  ) async {
+    try {
+      await ref
+          .read(provedorDoRepositorioDeMemoriasDoEncontro)
+          .publiqueMidiasAsync(
+            identificadorDoEncontro: widget.identificadorDoEncontro,
+            midias: midias,
+            legenda: legenda,
+          );
+      return true;
+    } on ExcecaoDaApi catch (excecao) {
+      if (mounted) {
+        _mostreAviso(excecao.mensagem);
+      }
+      return false;
+    }
+  }
+
+  void _mostreAviso(String mensagem) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mensagem)),
+    );
   }
 }
 
@@ -217,17 +353,24 @@ class _MiniaturaDaGaleria extends StatelessWidget {
   }
 
   Future<void> _abraVisualizador(BuildContext context) {
-    return showDialog<void>(
-      context: context,
-      useSafeArea: false,
-      builder: (BuildContext context) {
-        return Dialog.fullscreen(
-          backgroundColor: Colors.black,
-          child: _VisualizadorDaPublicacao(publicacao: publicacao),
-        );
-      },
-    );
+    return mostrePublicacaoDaMemoriaAsync(context, publicacao);
   }
+}
+
+Future<void> mostrePublicacaoDaMemoriaAsync(
+  BuildContext context,
+  MemoriaDoEncontro publicacao,
+) {
+  return showDialog<void>(
+    context: context,
+    useSafeArea: false,
+    builder: (BuildContext context) {
+      return Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: _VisualizadorDaPublicacao(publicacao: publicacao),
+      );
+    },
+  );
 }
 
 class _VisualizadorDaPublicacao extends ConsumerStatefulWidget {

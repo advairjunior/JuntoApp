@@ -42,6 +42,12 @@ public sealed class CrieMemoriaDoEncontro(
 
         Encontro encontro = await ObtenhaEncontroAsync(comando.IdentificadorDoEncontro, cancellationToken);
 
+        if (encontro.EstaCancelado)
+        {
+            throw new ExcecaoDeAplicacaoException(
+                "Não é possível adicionar memórias a um encontro cancelado.");
+        }
+
         ParticipanteDoEncontro participante = await ObtenhaParticipanteAsync(
             comando.IdentificadorDoEncontro,
             comando.IdentificadorDoUsuario,

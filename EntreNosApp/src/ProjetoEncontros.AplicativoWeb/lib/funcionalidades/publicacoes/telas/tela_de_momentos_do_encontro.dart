@@ -618,7 +618,7 @@ class _EstadoDaTelaDeMomentosDoEncontro
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return _DialogoDeNovaPublicacao(
+        return DialogoDeNovaPublicacao(
           midias: midias,
           legendaInicial: legendaInicial,
           aoPublicar: (String legenda) {
@@ -1141,7 +1141,7 @@ class _EstadoDoBalaoDeslizavelParaResposta
                 padding: EdgeInsets.only(left: 10),
                 child: Icon(
                   Icons.reply_rounded,
-                  color: CoresDoAplicativo.verdeDestaque,
+                  color: CoresDoAplicativo.azulInteracao,
                   size: 24,
                 ),
               ),
@@ -1261,7 +1261,7 @@ class _TrechoDaPublicacaoRespondida extends StatelessWidget {
           color: CoresDoAplicativo.fundoSecundario,
           border: Border(
             left: BorderSide(
-              color: CoresDoAplicativo.verdeDestaque,
+              color: CoresDoAplicativo.azulInteracao,
               width: 3,
             ),
           ),
@@ -1278,7 +1278,7 @@ class _TrechoDaPublicacaoRespondida extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: CoresDoAplicativo.verdeDestaque,
+                      color: CoresDoAplicativo.azulInteracao,
                       fontWeight: FontWeight.w700,
                       fontSize: 13,
                     ),
@@ -1329,7 +1329,7 @@ class _AudioDoMomento extends StatelessWidget {
       children: <Widget>[
         const Icon(
           Icons.mic_rounded,
-          color: CoresDoAplicativo.verdeDestaque,
+          color: CoresDoAplicativo.azulInteracao,
         ),
         const SizedBox(width: EspacamentosDoAplicativo.pequeno),
         Expanded(
@@ -1434,45 +1434,207 @@ class _ImagemDoMomento extends StatelessWidget {
                   ),
               ],
             ),
-            body: Column(
-              children: <Widget>[
-                Expanded(
-                  child: InteractiveViewer(
-                    minScale: 0.8,
-                    maxScale: 4,
-                    child: Center(
-                      child: ImagemPrivada(
-                        recurso: recurso,
-                        ajuste: BoxFit.contain,
-                        construaSubstituta: (_) => const Icon(
-                          Icons.broken_image_outlined,
-                          size: 52,
-                          color: Colors.white54,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                if (publicacao.texto != null &&
-                    publicacao.texto!.trim().isNotEmpty)
-                  SafeArea(
-                    top: false,
-                    child: Padding(
-                      padding: const EdgeInsets.all(
-                        EspacamentosDoAplicativo.padrao,
-                      ),
-                      child: Text(
-                        publicacao.texto!,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-              ],
+            body: _VisualizadorDaImagemDoMomento(
+              recurso: recurso,
+              legenda: publicacao.texto,
             ),
           ),
         );
       },
     );
+  }
+}
+
+class _VisualizadorDaImagemDoMomento extends StatefulWidget {
+  const _VisualizadorDaImagemDoMomento({
+    required this.recurso,
+    required this.legenda,
+  });
+
+  final String recurso;
+  final String? legenda;
+
+  @override
+  State<_VisualizadorDaImagemDoMomento> createState() =>
+      _EstadoDoVisualizadorDaImagemDoMomento();
+}
+
+class _EstadoDoVisualizadorDaImagemDoMomento
+    extends State<_VisualizadorDaImagemDoMomento> {
+  static const double _distanciaMinimaParaFechar = 110;
+  static const double _distanciaMaximaDoArraste = 280;
+  static const double _margemParaIdentificarDirecao = 8;
+
+  final TransformationController _controladorDaTransformacao =
+      TransformationController();
+  int? _ponteiroAtivo;
+  Offset? _posicaoInicial;
+  double _deslocamentoVertical = 0;
+  double _escalaAtual = 1;
+  bool _gestoEhVertical = false;
+  bool _gestoFoiDescartado = false;
+  bool _estaArrastando = false;
+
+  bool get _imagemEstaAmpliada => _escalaAtual > 1.02;
+
+  @override
+  void dispose() {
+    _controladorDaTransformacao.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    double progressoDoFechamento =
+        (_deslocamentoVertical / _distanciaMaximaDoArraste).clamp(0, 1);
+
+    return ColoredBox(
+      color: Color.lerp(
+        Colors.black,
+        Colors.transparent,
+        progressoDoFechamento * 0.75,
+      )!,
+      child: Listener(
+        key: const Key('visualizador-da-imagem-do-feed'),
+        onPointerDown: _inicieGesto,
+        onPointerMove: _acompanheGesto,
+        onPointerUp: _finalizeGesto,
+        onPointerCancel: _canceleGesto,
+        child: AnimatedContainer(
+          duration: _estaArrastando
+              ? Duration.zero
+              : const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          transform: Matrix4.translationValues(0, _deslocamentoVertical, 0),
+          child: Column(
+            children: <Widget>[
+              Expanded(
+                child: InteractiveViewer(
+                  transformationController: _controladorDaTransformacao,
+                  minScale: 1,
+                  maxScale: 4,
+                  panEnabled: _imagemEstaAmpliada,
+                  onInteractionUpdate: (_) {
+                    double escala =
+                        _controladorDaTransformacao.value.getMaxScaleOnAxis();
+
+                    if ((escala - _escalaAtual).abs() > 0.001) {
+                      setState(() {
+                        _escalaAtual = escala;
+                      });
+                    }
+                  },
+                  child: Center(
+                    child: ImagemPrivada(
+                      recurso: widget.recurso,
+                      ajuste: BoxFit.contain,
+                      construaSubstituta: (_) => const Icon(
+                        Icons.broken_image_outlined,
+                        size: 52,
+                        color: Colors.white54,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (widget.legenda != null && widget.legenda!.trim().isNotEmpty)
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.all(
+                      EspacamentosDoAplicativo.padrao,
+                    ),
+                    child: Text(
+                      widget.legenda!,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _inicieGesto(PointerDownEvent evento) {
+    if (_imagemEstaAmpliada || _ponteiroAtivo != null) {
+      _gestoFoiDescartado = true;
+      return;
+    }
+
+    _ponteiroAtivo = evento.pointer;
+    _posicaoInicial = evento.position;
+    _gestoEhVertical = false;
+    _gestoFoiDescartado = false;
+  }
+
+  void _acompanheGesto(PointerMoveEvent evento) {
+    if (evento.pointer != _ponteiroAtivo ||
+        _posicaoInicial == null ||
+        _imagemEstaAmpliada ||
+        _gestoFoiDescartado) {
+      return;
+    }
+
+    Offset diferenca = evento.position - _posicaoInicial!;
+
+    if (!_gestoEhVertical) {
+      if (diferenca.distance < _margemParaIdentificarDirecao) {
+        return;
+      }
+
+      if (diferenca.dy <= 0 || diferenca.dy.abs() <= diferenca.dx.abs() * 1.2) {
+        _gestoFoiDescartado = true;
+        return;
+      }
+
+      _gestoEhVertical = true;
+    }
+
+    setState(() {
+      _estaArrastando = true;
+      _deslocamentoVertical = diferenca.dy.clamp(0, _distanciaMaximaDoArraste);
+    });
+  }
+
+  void _finalizeGesto(PointerUpEvent evento) {
+    if (evento.pointer != _ponteiroAtivo) {
+      return;
+    }
+
+    bool deveFechar =
+        _gestoEhVertical && _deslocamentoVertical >= _distanciaMinimaParaFechar;
+    _limpeGesto();
+
+    if (deveFechar) {
+      Navigator.of(context).pop();
+      return;
+    }
+
+    setState(() {
+      _estaArrastando = false;
+      _deslocamentoVertical = 0;
+    });
+  }
+
+  void _canceleGesto(PointerCancelEvent evento) {
+    if (evento.pointer != _ponteiroAtivo) {
+      return;
+    }
+
+    _limpeGesto();
+    setState(() {
+      _estaArrastando = false;
+      _deslocamentoVertical = 0;
+    });
+  }
+
+  void _limpeGesto() {
+    _ponteiroAtivo = null;
+    _posicaoInicial = null;
+    _gestoEhVertical = false;
+    _gestoFoiDescartado = false;
   }
 }
 
@@ -2150,11 +2312,12 @@ String _formateDuracao(Duration duracao) {
   return '$minutos:${segundos.toString().padLeft(2, '0')}';
 }
 
-class _DialogoDeNovaPublicacao extends StatefulWidget {
-  const _DialogoDeNovaPublicacao({
+class DialogoDeNovaPublicacao extends StatefulWidget {
+  const DialogoDeNovaPublicacao({
     required this.midias,
     required this.legendaInicial,
     required this.aoPublicar,
+    super.key,
   });
 
   final List<MidiaSelecionada> midias;
@@ -2162,11 +2325,11 @@ class _DialogoDeNovaPublicacao extends StatefulWidget {
   final Future<bool> Function(String legenda) aoPublicar;
 
   @override
-  State<_DialogoDeNovaPublicacao> createState() =>
+  State<DialogoDeNovaPublicacao> createState() =>
       _EstadoDoDialogoDeNovaPublicacao();
 }
 
-class _EstadoDoDialogoDeNovaPublicacao extends State<_DialogoDeNovaPublicacao> {
+class _EstadoDoDialogoDeNovaPublicacao extends State<DialogoDeNovaPublicacao> {
   late final TextEditingController _controladorDaLegenda;
   final PageController _controladorDasMidias = PageController();
   int _indiceDaMidia = 0;
