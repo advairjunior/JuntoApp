@@ -1,0 +1,20 @@
+services:
+  postgres-ensaio:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: projeto_encontros
+      POSTGRES_PASSWORD: projeto_encontros_ensaio
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "127.0.0.1:55433:5432"
+    volumes:
+      - dados_postgres_ensaio:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U projeto_encontros -d postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  dados_postgres_ensaio:
