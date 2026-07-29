@@ -1167,6 +1167,124 @@ public sealed class TestesDeEncontros
         Assert.Single(ambiente.RepositorioDeMemoriasDoEncontro.Memorias);
     }
 
+    [Theory]
+    [InlineData("audio/mp4", "0000000C6674797069736F6D")]
+    [InlineData("audio/webm", "1A45DFA3")]
+    public async Task CrieAsync_DeveCriarMemoriaComUmUnicoAudio(
+        string tipoDeConteudo,
+        string cabecalhoEmHexadecimal)
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Resenha", InicioFuturo, IdentificadorDoUsuario);
+        CrieMemoriaDoEncontro crieMemoriaDoEncontro = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeMemoriasDoEncontro,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.ArmazenamentoDeMidiasDeMemoria,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+        byte[] conteudo = Convert.FromHexString(cabecalhoEmHexadecimal);
+        CrieMemoriaDoEncontroComando comando = new(
+            IdentificadorDoUsuario,
+            encontro.Identificador,
+            "Recado em áudio",
+            [new("audio", tipoDeConteudo, conteudo.Length, new MemoryStream(conteudo))]);
+
+        MemoriaDoEncontroResposta resposta = await crieMemoriaDoEncontro.CrieAsync(
+            comando,
+            CancellationToken.None);
+
+        Assert.Equal(tipoDeConteudo, Assert.Single(resposta.Midias).TipoDeConteudo);
+        Assert.Equal(
+            tipoDeConteudo,
+            Assert.Single(ambiente.RepositorioDeEncontros.Publicacoes).TipoDeConteudoDaMidia);
+        Assert.Single(ambiente.RepositorioDeMemoriasDoEncontro.Memorias);
+        Assert.Single(ambiente.RepositorioDeMemoriasDoEncontro.Midias);
+    }
+
+    [Fact]
+    public async Task CrieAsync_DeveRejeitarAudioComOutroArquivo()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Resenha", InicioFuturo, IdentificadorDoUsuario);
+        CrieMemoriaDoEncontro crieMemoriaDoEncontro = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeMemoriasDoEncontro,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.ArmazenamentoDeMidiasDeMemoria,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+        CrieMemoriaDoEncontroComando comando = new(
+            IdentificadorDoUsuario,
+            encontro.Identificador,
+            "Áudio e foto",
+            [
+                new("audio.webm", "audio/webm", 4, new MemoryStream([0x1A, 0x45, 0xDF, 0xA3])),
+                new("foto.jpg", "image/jpeg", 6, new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xD9]))
+            ]);
+
+        ExcecaoDeAplicacaoException excecao = await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
+            crieMemoriaDoEncontro.CrieAsync(comando, CancellationToken.None));
+
+        Assert.Contains("exatamente um arquivo", excecao.Message);
+        Assert.Empty(ambiente.RepositorioDeMemoriasDoEncontro.Memorias);
+        Assert.Empty(ambiente.RepositorioDeEncontros.Publicacoes);
+    }
+
+    [Fact]
+    public async Task CrieAsync_DeveRejeitarAudioComAssinaturaDeContainerInvalida()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Resenha", InicioFuturo, IdentificadorDoUsuario);
+        CrieMemoriaDoEncontro crieMemoriaDoEncontro = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeMemoriasDoEncontro,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.ArmazenamentoDeMidiasDeMemoria,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+        CrieMemoriaDoEncontroComando comando = new(
+            IdentificadorDoUsuario,
+            encontro.Identificador,
+            "Áudio inválido",
+            [new("audio.webm", "audio/webm", 4, new MemoryStream([0x00, 0x00, 0x00, 0x00]))]);
+
+        ExcecaoDeAplicacaoException excecao = await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
+            crieMemoriaDoEncontro.CrieAsync(comando, CancellationToken.None));
+
+        Assert.Contains("áudio MP4 ou WEBM válido", excecao.Message);
+        Assert.Empty(ambiente.RepositorioDeMemoriasDoEncontro.Memorias);
+    }
+
+    [Fact]
+    public async Task CrieAsync_DeveManterLimiteDeDezMegabytesParaAudio()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Resenha", InicioFuturo, IdentificadorDoUsuario);
+        CrieMemoriaDoEncontro crieMemoriaDoEncontro = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeMemoriasDoEncontro,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.ArmazenamentoDeMidiasDeMemoria,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+        CrieMemoriaDoEncontroComando comando = new(
+            IdentificadorDoUsuario,
+            encontro.Identificador,
+            "Áudio grande",
+            [new(
+                "audio.mp4",
+                "audio/mp4",
+                MidiaDaMemoria.TamanhoMaximoEmBytes + 1,
+                new MemoryStream(Convert.FromHexString("0000000C6674797069736F6D")))]);
+
+        ExcecaoDeAplicacaoException excecao = await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
+            crieMemoriaDoEncontro.CrieAsync(comando, CancellationToken.None));
+
+        Assert.Contains("10 MB", excecao.Message);
+        Assert.Empty(ambiente.RepositorioDeMemoriasDoEncontro.Memorias);
+    }
+
     [Fact]
     public async Task CrieAsync_DeveRemoverMidiaQuandoPersistenciaFalhar()
     {

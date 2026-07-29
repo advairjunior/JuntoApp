@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +12,9 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/estru
 import 'package:projeto_encontros_aplicativo_web/compartilhado/configuracao/configuracao_do_ambiente.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/imagem_privada.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/foto_de_perfil.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/midias/audio_privado.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/midias/contrato_do_gravador_de_audio.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/midias/provedor_do_gravador_de_audio.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/midias/video_privado.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/cores_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos_do_aplicativo.dart';
@@ -41,7 +46,9 @@ class TelaDeMomentosDoEncontro extends ConsumerStatefulWidget {
 }
 
 class _EstadoDaTelaDeMomentosDoEncontro
-    extends ConsumerState<TelaDeMomentosDoEncontro> {
+    extends ConsumerState<TelaDeMomentosDoEncontro>
+    with WidgetsBindingObserver {
+  static const Duration _duracaoMaximaDoAudio = Duration(minutes: 2);
   static const List<String> _emojis = <String>[
     '😀',
     '😂',
@@ -56,17 +63,42 @@ class _EstadoDaTelaDeMomentosDoEncontro
   final TextEditingController _controladorDoTexto = TextEditingController();
   final ScrollController _controladorDaRolagem = ScrollController();
   final FocusNode _focoDoTexto = FocusNode();
+  late final IGravadorDeAudio _gravadorDeAudio;
+  Timer? _cronometroDoAudio;
+  Duration _duracaoDoAudio = Duration.zero;
+  AudioGravado? _audioPendente;
+  bool _estaSolicitandoMicrofone = false;
+  bool _estaGravandoAudio = false;
+  bool _estaFinalizandoAudio = false;
+  bool _estaEnviandoAudio = false;
   bool _seletorDeEmojiEstaVisivel = false;
   PublicacaoDoEncontro? _publicacaoSendoRespondida;
   int _quantidadeAnteriorDePublicacoes = -1;
   bool _respostaDePresencaFoiSolicitada = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _gravadorDeAudio = ref.read(provedorDoGravadorDeAudio);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cronometroDoAudio?.cancel();
+    unawaited(_gravadorDeAudio.canceleAsync());
     _controladorDoTexto.dispose();
     _controladorDaRolagem.dispose();
     _focoDoTexto.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState estado) {
+    if (estado != AppLifecycleState.resumed && _estaGravandoAudio) {
+      unawaited(_canceleGravacaoDeAudioAsync());
+    }
   }
 
   @override
@@ -173,9 +205,19 @@ class _EstadoDaTelaDeMomentosDoEncontro
                       _CompositorDeMomento(
                         controladorDoTexto: _controladorDoTexto,
                         focoDoTexto: _focoDoTexto,
-                        estaPublicando: estado.estaPublicando,
+                        estaPublicando:
+                            estado.estaPublicando || _estaEnviandoAudio,
                         publicacaoSendoRespondida: _publicacaoSendoRespondida,
+                        gravacaoEstaDisponivel: _gravadorDeAudio.estaDisponivel,
+                        estaSolicitandoMicrofone: _estaSolicitandoMicrofone,
+                        estaGravandoAudio: _estaGravandoAudio,
+                        estaFinalizandoAudio: _estaFinalizandoAudio,
+                        duracaoDoAudio: _duracaoDoAudio,
+                        audioPendente: _audioPendente,
                         aoSelecionarImagem: _selecioneMidiasAsync,
+                        aoIniciarAudio: _inicieGravacaoDeAudioAsync,
+                        aoCancelarAudio: _canceleAudioAsync,
+                        aoEnviarAudio: _finalizeEEnvieGravacaoDeAudioAsync,
                         aoCancelarResposta: _canceleResposta,
                         aoAlternarEmojis: () {
                           setState(() {
@@ -271,6 +313,7 @@ class _EstadoDaTelaDeMomentosDoEncontro
 
   Future<void> _publiqueAsync() async {
     String texto = _controladorDoTexto.text;
+    bool campoTinhaFoco = _focoDoTexto.hasFocus;
 
     if (texto.trim().isEmpty) {
       return;
@@ -305,6 +348,229 @@ class _EstadoDaTelaDeMomentosDoEncontro
         _publicacaoSendoRespondida = null;
       });
       _roleParaOFinal();
+
+      if (campoTinhaFoco) {
+        WidgetsBinding.instance.addPostFrameCallback((Duration _) {
+          if (mounted) {
+            _focoDoTexto.requestFocus();
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> _inicieGravacaoDeAudioAsync() async {
+    if (_estaSolicitandoMicrofone ||
+        _estaGravandoAudio ||
+        _estaFinalizandoAudio ||
+        !_gravadorDeAudio.estaDisponivel) {
+      return;
+    }
+
+    setState(() {
+      _estaSolicitandoMicrofone = true;
+      _seletorDeEmojiEstaVisivel = false;
+      _publicacaoSendoRespondida = null;
+      _audioPendente = null;
+      _duracaoDoAudio = Duration.zero;
+    });
+
+    try {
+      await _gravadorDeAudio.inicieAsync();
+
+      if (!mounted) {
+        await _gravadorDeAudio.canceleAsync();
+        return;
+      }
+
+      setState(() {
+        _estaSolicitandoMicrofone = false;
+        _estaGravandoAudio = true;
+      });
+      _cronometroDoAudio?.cancel();
+      _cronometroDoAudio = Timer.periodic(
+        const Duration(seconds: 1),
+        (Timer cronometro) {
+          if (!mounted || !_estaGravandoAudio) {
+            cronometro.cancel();
+            return;
+          }
+
+          Duration novaDuracao = Duration(
+            seconds: _duracaoDoAudio.inSeconds + 1,
+          );
+          setState(() {
+            _duracaoDoAudio = novaDuracao;
+          });
+
+          if (novaDuracao >= _duracaoMaximaDoAudio) {
+            cronometro.cancel();
+            unawaited(_finalizeEEnvieGravacaoDeAudioAsync());
+          }
+        },
+      );
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _estaSolicitandoMicrofone = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Não foi possível acessar o microfone. Verifique a permissão do navegador.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _finalizeGravacaoDeAudioAsync() async {
+    if (!_estaGravandoAudio || _estaFinalizandoAudio) {
+      return;
+    }
+
+    _cronometroDoAudio?.cancel();
+    setState(() {
+      _estaGravandoAudio = false;
+      _estaFinalizandoAudio = true;
+    });
+
+    try {
+      AudioGravado? audio = await _gravadorDeAudio.finalizeAsync(
+        _duracaoDoAudio,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _audioPendente = audio;
+        _estaFinalizandoAudio = false;
+      });
+
+      if (audio == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nenhum áudio foi gravado.')),
+        );
+      }
+    } on Object {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _estaFinalizandoAudio = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Não foi possível finalizar o áudio.')),
+      );
+    }
+  }
+
+  Future<void> _canceleAudioAsync() async {
+    if (_estaGravandoAudio || _estaSolicitandoMicrofone) {
+      await _canceleGravacaoDeAudioAsync();
+      return;
+    }
+
+    if (mounted) {
+      setState(() {
+        _audioPendente = null;
+        _duracaoDoAudio = Duration.zero;
+      });
+    }
+  }
+
+  Future<void> _canceleGravacaoDeAudioAsync() async {
+    _cronometroDoAudio?.cancel();
+
+    try {
+      await _gravadorDeAudio.canceleAsync();
+    } on Object {
+      // O cancelamento sempre deve devolver a interface ao estado inicial.
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _estaSolicitandoMicrofone = false;
+      _estaGravandoAudio = false;
+      _estaFinalizandoAudio = false;
+      _audioPendente = null;
+      _duracaoDoAudio = Duration.zero;
+    });
+  }
+
+  Future<void> _envieAudioAsync() async {
+    AudioGravado? audio = _audioPendente;
+
+    if (audio == null || _estaEnviandoAudio) {
+      return;
+    }
+
+    setState(() {
+      _estaEnviandoAudio = true;
+    });
+    MidiaSelecionada midia = MidiaSelecionada(
+      nome: audio.nomeDoArquivo,
+      tipoDeConteudo: audio.tipoDeConteudo,
+      conteudo: audio.bytes,
+    );
+    bool publicou = false;
+
+    try {
+      publicou = await ref
+          .read(
+        provedorDoControladorDosMomentosDoEncontro(
+          widget.identificadorDoEncontro,
+        ).notifier,
+      )
+          .publiqueMidiasAsync(<MidiaSelecionada>[midia], '');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _estaEnviandoAudio = false;
+        });
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (publicou) {
+      setState(() {
+        _audioPendente = null;
+        _duracaoDoAudio = Duration.zero;
+      });
+      _roleParaOFinal();
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('O áudio não foi enviado. Você pode tentar novamente.'),
+      ),
+    );
+  }
+
+  Future<void> _finalizeEEnvieGravacaoDeAudioAsync() async {
+    if (_estaFinalizandoAudio || _estaEnviandoAudio) {
+      return;
+    }
+
+    if (_estaGravandoAudio) {
+      await _finalizeGravacaoDeAudioAsync();
+    }
+
+    if (_audioPendente != null) {
+      await _envieAudioAsync();
     }
   }
 
@@ -788,6 +1054,13 @@ class _MomentoDeParticipante extends StatelessWidget {
               aoRemover: () => aoRemover(publicacao),
             ),
           ],
+          if (publicacao.ehAudio) ...<Widget>[
+            const SizedBox(height: EspacamentosDoAplicativo.pequeno),
+            _AudioDoMomento(
+              publicacao: publicacao,
+              aoRemover: () => aoRemover(publicacao),
+            ),
+          ],
         ],
       ),
     );
@@ -968,7 +1241,7 @@ class _TrechoDaPublicacaoRespondida extends StatelessWidget {
         : publicacaoRespondida.texto?.trim().isNotEmpty == true
             ? publicacaoRespondida.texto!.trim()
             : publicacaoRespondida.temMidia
-                ? 'Foto'
+                ? 'Mídia'
                 : 'Publicação';
 
     String descricaoSemantica =
@@ -1033,6 +1306,46 @@ class _TrechoDaPublicacaoRespondida extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _AudioDoMomento extends StatelessWidget {
+  const _AudioDoMomento({
+    required this.publicacao,
+    required this.aoRemover,
+  });
+
+  final PublicacaoDoEncontro publicacao;
+  final Future<bool> Function() aoRemover;
+
+  @override
+  Widget build(BuildContext context) {
+    String recurso = ConfiguracaoDoAmbiente.crieUrlAbsoluta(
+      publicacao.urlDaMidia,
+    );
+
+    return Row(
+      children: <Widget>[
+        const Icon(
+          Icons.mic_rounded,
+          color: CoresDoAplicativo.verdeDestaque,
+        ),
+        const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+        Expanded(
+          child: AudioPrivado(
+            recurso: recurso,
+            tipoDeConteudo: publicacao.tipoDeConteudoDaMidia ?? 'audio/webm',
+          ),
+        ),
+        if (publicacao.usuarioAtual)
+          IconButton(
+            key: Key('remover-audio-${publicacao.identificador}'),
+            tooltip: 'Remover áudio',
+            onPressed: () => aoRemover(),
+            icon: const Icon(Icons.delete_outline_rounded, size: 20),
+          ),
+      ],
     );
   }
 }
@@ -1183,18 +1496,23 @@ class _AvatarDoAutor extends StatelessWidget {
       label: 'Abrir perfil de ${publicacao.nomeDoAutor}',
       child: Tooltip(
         message: 'Ver perfil de ${publicacao.nomeDoAutor}',
-        child: InkResponse(
+        child: GestureDetector(
           key: Key(
             'abrir-perfil-${publicacao.identificadorDoUsuarioAutor}',
           ),
-          radius: 24,
+          behavior: HitTestBehavior.opaque,
           onTap: aoTocar,
-          child: Padding(
-            padding: const EdgeInsets.all(4),
-            child: FotoDePerfil(
-              url: publicacao.urlDaFotoDePerfilDoAutor,
-              iniciais: inicial,
-              dimensao: 32,
+          child: SizedBox.square(
+            dimension: 48,
+            child: Center(
+              child: FotoDePerfil(
+                key: Key(
+                  'foto-do-feed-${publicacao.identificadorDoUsuarioAutor}',
+                ),
+                url: publicacao.urlDaFotoDePerfilDoAutor,
+                iniciais: inicial,
+                dimensao: 32,
+              ),
             ),
           ),
         ),
@@ -1203,13 +1521,22 @@ class _AvatarDoAutor extends StatelessWidget {
   }
 }
 
-class _CompositorDeMomento extends StatelessWidget {
+class _CompositorDeMomento extends StatefulWidget {
   const _CompositorDeMomento({
     required this.controladorDoTexto,
     required this.focoDoTexto,
     required this.estaPublicando,
     required this.publicacaoSendoRespondida,
+    required this.gravacaoEstaDisponivel,
+    required this.estaSolicitandoMicrofone,
+    required this.estaGravandoAudio,
+    required this.estaFinalizandoAudio,
+    required this.duracaoDoAudio,
+    required this.audioPendente,
     required this.aoSelecionarImagem,
+    required this.aoIniciarAudio,
+    required this.aoCancelarAudio,
+    required this.aoEnviarAudio,
     required this.aoCancelarResposta,
     required this.aoAlternarEmojis,
     required this.aoPublicar,
@@ -1219,15 +1546,185 @@ class _CompositorDeMomento extends StatelessWidget {
   final FocusNode focoDoTexto;
   final bool estaPublicando;
   final PublicacaoDoEncontro? publicacaoSendoRespondida;
+  final bool gravacaoEstaDisponivel;
+  final bool estaSolicitandoMicrofone;
+  final bool estaGravandoAudio;
+  final bool estaFinalizandoAudio;
+  final Duration duracaoDoAudio;
+  final AudioGravado? audioPendente;
   final VoidCallback aoSelecionarImagem;
+  final Future<void> Function() aoIniciarAudio;
+  final Future<void> Function() aoCancelarAudio;
+  final Future<void> Function() aoEnviarAudio;
   final VoidCallback aoCancelarResposta;
   final VoidCallback aoAlternarEmojis;
   final VoidCallback aoPublicar;
+
+  @override
+  State<_CompositorDeMomento> createState() => _EstadoDoCompositorDeMomento();
+}
+
+class _EstadoDoCompositorDeMomento extends State<_CompositorDeMomento> {
+  static const Duration _tempoParaIniciarGravacao = Duration(
+    milliseconds: 450,
+  );
+  static const double _distanciaParaCancelar = 72;
+
+  Timer? _temporizadorDaPressao;
+  int? _identificadorDoPonteiro;
+  Offset? _origemDaPressao;
+  Future<void>? _inicioDaGravacao;
+  bool _gravacaoFoiIniciadaPeloGesto = false;
+  bool _cancelamentoFoiSolicitado = false;
+  bool _acaoDoGestoFoiConcluida = false;
+
+  TextEditingController get controladorDoTexto => widget.controladorDoTexto;
+  FocusNode get focoDoTexto => widget.focoDoTexto;
+  bool get estaPublicando => widget.estaPublicando;
+  PublicacaoDoEncontro? get publicacaoSendoRespondida =>
+      widget.publicacaoSendoRespondida;
+  bool get gravacaoEstaDisponivel => widget.gravacaoEstaDisponivel;
+  bool get estaSolicitandoMicrofone => widget.estaSolicitandoMicrofone;
+  bool get estaGravandoAudio => widget.estaGravandoAudio;
+  bool get estaFinalizandoAudio => widget.estaFinalizandoAudio;
+  Duration get duracaoDoAudio => widget.duracaoDoAudio;
+  AudioGravado? get audioPendente => widget.audioPendente;
+  VoidCallback get aoSelecionarImagem => widget.aoSelecionarImagem;
+  Future<void> Function() get aoIniciarAudio => widget.aoIniciarAudio;
+  Future<void> Function() get aoCancelarAudio => widget.aoCancelarAudio;
+  Future<void> Function() get aoEnviarAudio => widget.aoEnviarAudio;
+  VoidCallback get aoCancelarResposta => widget.aoCancelarResposta;
+  VoidCallback get aoAlternarEmojis => widget.aoAlternarEmojis;
+  VoidCallback get aoPublicar => widget.aoPublicar;
 
   bool get _estaEmComputador {
     return defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.linux;
+  }
+
+  @override
+  void dispose() {
+    _temporizadorDaPressao?.cancel();
+    super.dispose();
+  }
+
+  void _pressioneMicrofone(PointerDownEvent evento) {
+    if (_estaEmComputador ||
+        estaPublicando ||
+        _identificadorDoPonteiro != null) {
+      return;
+    }
+
+    _identificadorDoPonteiro = evento.pointer;
+    _origemDaPressao = evento.position;
+    _gravacaoFoiIniciadaPeloGesto = false;
+    _cancelamentoFoiSolicitado = false;
+    _acaoDoGestoFoiConcluida = false;
+    _inicioDaGravacao = null;
+    _temporizadorDaPressao?.cancel();
+    _temporizadorDaPressao = Timer(_tempoParaIniciarGravacao, () {
+      if (!mounted || _identificadorDoPonteiro != evento.pointer) {
+        return;
+      }
+
+      setState(() {
+        _gravacaoFoiIniciadaPeloGesto = true;
+      });
+      _inicioDaGravacao = aoIniciarAudio();
+    });
+  }
+
+  void _acompanhePonteiro(PointerMoveEvent evento) {
+    if (_identificadorDoPonteiro != evento.pointer ||
+        _origemDaPressao == null ||
+        _cancelamentoFoiSolicitado) {
+      return;
+    }
+
+    double deslocamentoVertical = evento.position.dy - _origemDaPressao!.dy;
+    double deslocamentoHorizontal = evento.position.dx - _origemDaPressao!.dx;
+
+    if (!_gravacaoFoiIniciadaPeloGesto &&
+        (deslocamentoVertical.abs() > 18 ||
+            deslocamentoHorizontal.abs() > 18)) {
+      _reinicieGestoDeAudio();
+      return;
+    }
+
+    if (deslocamentoHorizontal > -_distanciaParaCancelar) {
+      return;
+    }
+
+    _temporizadorDaPressao?.cancel();
+    setState(() {
+      _cancelamentoFoiSolicitado = true;
+    });
+
+    if (_gravacaoFoiIniciadaPeloGesto) {
+      unawaited(_concluaGestoDeAudioAsync(cancele: true));
+    }
+  }
+
+  void _soltePonteiro(PointerUpEvent evento) {
+    if (_identificadorDoPonteiro != evento.pointer) {
+      return;
+    }
+
+    _temporizadorDaPressao?.cancel();
+    if (!_gravacaoFoiIniciadaPeloGesto) {
+      _reinicieGestoDeAudio();
+      return;
+    }
+
+    unawaited(
+      _concluaGestoDeAudioAsync(cancele: _cancelamentoFoiSolicitado),
+    );
+  }
+
+  void _cancelePonteiro(PointerCancelEvent evento) {
+    if (_identificadorDoPonteiro != evento.pointer) {
+      return;
+    }
+
+    _temporizadorDaPressao?.cancel();
+    if (!_gravacaoFoiIniciadaPeloGesto) {
+      _reinicieGestoDeAudio();
+      return;
+    }
+
+    unawaited(_concluaGestoDeAudioAsync(cancele: true));
+  }
+
+  Future<void> _concluaGestoDeAudioAsync({required bool cancele}) async {
+    if (_acaoDoGestoFoiConcluida) {
+      return;
+    }
+
+    _acaoDoGestoFoiConcluida = true;
+    try {
+      await _inicioDaGravacao;
+      if (cancele) {
+        await aoCancelarAudio();
+      } else {
+        await aoEnviarAudio();
+      }
+    } finally {
+      if (mounted) {
+        setState(_reinicieGestoDeAudio);
+      }
+    }
+  }
+
+  void _reinicieGestoDeAudio() {
+    _temporizadorDaPressao?.cancel();
+    _temporizadorDaPressao = null;
+    _identificadorDoPonteiro = null;
+    _origemDaPressao = null;
+    _inicioDaGravacao = null;
+    _gravacaoFoiIniciadaPeloGesto = false;
+    _cancelamentoFoiSolicitado = false;
+    _acaoDoGestoFoiConcluida = false;
   }
 
   KeyEventResult _processeTecla(FocusNode _, KeyEvent evento) {
@@ -1281,116 +1778,376 @@ class _CompositorDeMomento extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: CoresDoAplicativo.fundoElevado,
-        border: const Border(
-          top: BorderSide(color: CoresDoAplicativo.bordaDiscreta),
-        ),
-        boxShadow: <BoxShadow>[
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
-            blurRadius: 18,
-            offset: const Offset(0, -5),
+    return Listener(
+      onPointerMove: _acompanhePonteiro,
+      onPointerUp: _soltePonteiro,
+      onPointerCancel: _cancelePonteiro,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: CoresDoAplicativo.fundoElevado,
+          border: const Border(
+            top: BorderSide(color: CoresDoAplicativo.bordaDiscreta),
           ),
-        ],
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(EspacamentosDoAplicativo.pequeno),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              if (publicacaoSendoRespondida != null) ...<Widget>[
-                _TrechoDaPublicacaoRespondida(
-                  publicacaoRespondida: PublicacaoRespondida(
-                    identificador: publicacaoSendoRespondida!.identificador,
-                    nomeDoAutor: publicacaoSendoRespondida!.usuarioAtual
-                        ? 'Você'
-                        : publicacaoSendoRespondida!.nomeDoAutor,
-                    texto: publicacaoSendoRespondida!.texto,
-                    temMidia: publicacaoSendoRespondida!.temMidia,
-                    foiRemovida: false,
-                  ),
-                  exibaAcaoDeCancelar: true,
-                  aoCancelar: aoCancelarResposta,
-                ),
-                const SizedBox(height: EspacamentosDoAplicativo.pequeno),
-              ],
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: <Widget>[
-                  IconButton(
-                    key: const Key('selecionar-foto'),
-                    tooltip: 'Adicionar foto',
-                    onPressed: estaPublicando ? null : aoSelecionarImagem,
-                    icon: const Icon(Icons.add_photo_alternate_outlined),
-                  ),
-                  IconButton(
-                    key: const Key('alternar-emojis'),
-                    tooltip: 'Emojis',
-                    onPressed: estaPublicando ? null : aoAlternarEmojis,
-                    icon: const Icon(Icons.sentiment_satisfied_alt_rounded),
-                  ),
-                  Expanded(
-                    child: Focus(
-                      onKeyEvent: _processeTecla,
-                      child: TextField(
-                        key: const Key('texto-da-nova-publicacao'),
-                        controller: controladorDoTexto,
-                        focusNode: focoDoTexto,
-                        enabled: !estaPublicando,
-                        minLines: 1,
-                        maxLines: 4,
-                        maxLength: 1000,
-                        buildCounter: (
-                          BuildContext context, {
-                          required int currentLength,
-                          required bool isFocused,
-                          required int? maxLength,
-                        }) {
-                          return null;
-                        },
-                        textInputAction: TextInputAction.newline,
-                        decoration: InputDecoration(
-                          hintText: 'Compartilhe algo com o encontro',
-                          filled: true,
-                          fillColor: CoresDoAplicativo.fundoDoCartaoSuave,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 11,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(
-                              RaiosDoAplicativo.pilula,
+          boxShadow: <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.22),
+              blurRadius: 18,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.all(EspacamentosDoAplicativo.pequeno),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                if (estaSolicitandoMicrofone ||
+                    estaGravandoAudio ||
+                    estaFinalizandoAudio)
+                  _ControlesDaGravacaoDeAudio(
+                    estaSolicitandoMicrofone: estaSolicitandoMicrofone,
+                    estaGravando: estaGravandoAudio,
+                    estaFinalizando: estaFinalizandoAudio,
+                    duracao: duracaoDoAudio,
+                    mostreDicaDeDeslize:
+                        !_estaEmComputador && _gravacaoFoiIniciadaPeloGesto,
+                    cancelamentoFoiSolicitado: _cancelamentoFoiSolicitado,
+                    aoCancelar: aoCancelarAudio,
+                    aoEnviar: aoEnviarAudio,
+                  )
+                else if (audioPendente != null)
+                  _PreviaDoAudioGravado(
+                    audio: audioPendente!,
+                    estaPublicando: estaPublicando,
+                    aoCancelar: aoCancelarAudio,
+                    aoEnviar: aoEnviarAudio,
+                  )
+                else ...<Widget>[
+                  if (publicacaoSendoRespondida != null) ...<Widget>[
+                    _TrechoDaPublicacaoRespondida(
+                      publicacaoRespondida: PublicacaoRespondida(
+                        identificador: publicacaoSendoRespondida!.identificador,
+                        nomeDoAutor: publicacaoSendoRespondida!.usuarioAtual
+                            ? 'Você'
+                            : publicacaoSendoRespondida!.nomeDoAutor,
+                        texto: publicacaoSendoRespondida!.texto,
+                        temMidia: publicacaoSendoRespondida!.temMidia,
+                        foiRemovida: false,
+                      ),
+                      exibaAcaoDeCancelar: true,
+                      aoCancelar: aoCancelarResposta,
+                    ),
+                    const SizedBox(height: EspacamentosDoAplicativo.pequeno),
+                  ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: <Widget>[
+                      IconButton(
+                        key: const Key('selecionar-foto'),
+                        tooltip: 'Adicionar foto',
+                        onPressed: estaPublicando ? null : aoSelecionarImagem,
+                        icon: const Icon(Icons.add_photo_alternate_outlined),
+                      ),
+                      IconButton(
+                        key: const Key('alternar-emojis'),
+                        tooltip: 'Emojis',
+                        onPressed: estaPublicando ? null : aoAlternarEmojis,
+                        icon: const Icon(Icons.sentiment_satisfied_alt_rounded),
+                      ),
+                      Expanded(
+                        child: Focus(
+                          onKeyEvent: _processeTecla,
+                          child: TextField(
+                            key: const Key('texto-da-nova-publicacao'),
+                            controller: controladorDoTexto,
+                            focusNode: focoDoTexto,
+                            enabled: !estaPublicando,
+                            minLines: 1,
+                            maxLines: 4,
+                            maxLength: 1000,
+                            buildCounter: (
+                              BuildContext context, {
+                              required int currentLength,
+                              required bool isFocused,
+                              required int? maxLength,
+                            }) {
+                              return null;
+                            },
+                            textInputAction: TextInputAction.newline,
+                            decoration: InputDecoration(
+                              hintText: 'Compartilhe algo com o encontro',
+                              filled: true,
+                              fillColor: CoresDoAplicativo.fundoDoCartaoSuave,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 11,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(
+                                  RaiosDoAplicativo.pilula,
+                                ),
+                                borderSide: BorderSide.none,
+                              ),
                             ),
-                            borderSide: BorderSide.none,
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: EspacamentosDoAplicativo.pequeno),
-                  IconButton.filled(
-                    key: const Key('publicar-momento'),
-                    tooltip: 'Publicar',
-                    onPressed: estaPublicando ? null : aoPublicar,
-                    icon: estaPublicando
-                        ? const SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send_rounded),
+                      const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: controladorDoTexto,
+                        builder: (
+                          BuildContext context,
+                          TextEditingValue valor,
+                          Widget? child,
+                        ) {
+                          bool temTexto = valor.text.trim().isNotEmpty;
+
+                          if (!temTexto && gravacaoEstaDisponivel) {
+                            return _BotaoDeMicrofone(
+                              estaEmComputador: _estaEmComputador,
+                              estaDesabilitado: estaPublicando,
+                              aoClicar: aoIniciarAudio,
+                              aoPressionar: _pressioneMicrofone,
+                            );
+                          }
+
+                          return IconButton.filled(
+                            key: const Key('publicar-momento'),
+                            tooltip: 'Publicar',
+                            onPressed:
+                                estaPublicando || !temTexto ? null : aoPublicar,
+                            icon: estaPublicando
+                                ? const SizedBox.square(
+                                    dimension: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Icon(Icons.send_rounded),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
+
+class _BotaoDeMicrofone extends StatelessWidget {
+  const _BotaoDeMicrofone({
+    required this.estaEmComputador,
+    required this.estaDesabilitado,
+    required this.aoClicar,
+    required this.aoPressionar,
+  });
+
+  final bool estaEmComputador;
+  final bool estaDesabilitado;
+  final Future<void> Function() aoClicar;
+  final void Function(PointerDownEvent evento) aoPressionar;
+
+  @override
+  Widget build(BuildContext context) {
+    if (estaEmComputador) {
+      return IconButton.filled(
+        key: const Key('gravar-audio'),
+        tooltip: 'Gravar áudio',
+        onPressed: estaDesabilitado ? null : aoClicar,
+        icon: const Icon(Icons.mic_none_rounded),
+      );
+    }
+
+    return Semantics(
+      button: true,
+      label: 'Pressione e segure para gravar áudio',
+      child: Listener(
+        key: const Key('gravar-audio'),
+        onPointerDown: estaDesabilitado ? null : aoPressionar,
+        child: Tooltip(
+          message: 'Pressione e segure para gravar',
+          child: SizedBox.square(
+            dimension: 48,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: estaDesabilitado
+                    ? CoresDoAplicativo.bordaDiscreta
+                    : CoresDoAplicativo.verdeDestaque,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.mic_none_rounded,
+                color: estaDesabilitado
+                    ? CoresDoAplicativo.textoSecundario
+                    : CoresDoAplicativo.fundoPrincipal,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ControlesDaGravacaoDeAudio extends StatelessWidget {
+  const _ControlesDaGravacaoDeAudio({
+    required this.estaSolicitandoMicrofone,
+    required this.estaGravando,
+    required this.estaFinalizando,
+    required this.duracao,
+    required this.mostreDicaDeDeslize,
+    required this.cancelamentoFoiSolicitado,
+    required this.aoCancelar,
+    required this.aoEnviar,
+  });
+
+  final bool estaSolicitandoMicrofone;
+  final bool estaGravando;
+  final bool estaFinalizando;
+  final Duration duracao;
+  final bool mostreDicaDeDeslize;
+  final bool cancelamentoFoiSolicitado;
+  final Future<void> Function() aoCancelar;
+  final Future<void> Function() aoEnviar;
+
+  @override
+  Widget build(BuildContext context) {
+    String situacao = estaSolicitandoMicrofone
+        ? 'Aguardando permissão do microfone'
+        : estaFinalizando
+            ? 'Preparando áudio'
+            : _formateDuracao(duracao);
+
+    return Row(
+      children: <Widget>[
+        TextButton(
+          key: const Key('cancelar-gravacao-de-audio'),
+          onPressed: estaFinalizando ? null : aoCancelar,
+          child: const Text('Cancelar'),
+        ),
+        const SizedBox(width: EspacamentosDoAplicativo.minimo),
+        if (estaSolicitandoMicrofone || estaFinalizando)
+          const SizedBox.square(
+            dimension: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else
+          const Icon(
+            Icons.fiber_manual_record_rounded,
+            color: Colors.redAccent,
+            size: 18,
+          ),
+        const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                situacao,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (mostreDicaDeDeslize)
+                Text(
+                  cancelamentoFoiSolicitado
+                      ? 'Gravação cancelada'
+                      : 'Deslize para a esquerda para cancelar',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: CoresDoAplicativo.textoSecundario,
+                    fontSize: 11,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        IconButton.filled(
+          key: const Key('enviar-gravacao-de-audio'),
+          tooltip: 'Enviar áudio',
+          onPressed: estaGravando ? aoEnviar : null,
+          icon: estaFinalizando
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.send_rounded),
+        ),
+      ],
+    );
+  }
+}
+
+class _PreviaDoAudioGravado extends StatelessWidget {
+  const _PreviaDoAudioGravado({
+    required this.audio,
+    required this.estaPublicando,
+    required this.aoCancelar,
+    required this.aoEnviar,
+  });
+
+  final AudioGravado audio;
+  final bool estaPublicando;
+  final VoidCallback aoCancelar;
+  final VoidCallback aoEnviar;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: <Widget>[
+        IconButton(
+          key: const Key('descartar-audio-gravado'),
+          tooltip: 'Descartar áudio',
+          onPressed: estaPublicando ? null : aoCancelar,
+          icon: const Icon(Icons.delete_outline_rounded),
+        ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Áudio gravado · ${_formateDuracao(audio.duracao)}',
+                style: const TextStyle(
+                  color: CoresDoAplicativo.textoSecundario,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: EspacamentosDoAplicativo.minimo),
+              AudioComBytes(
+                bytes: audio.bytes,
+                tipoDeConteudo: audio.tipoDeConteudo,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+        IconButton.filled(
+          key: const Key('enviar-audio-gravado'),
+          tooltip: 'Enviar áudio',
+          onPressed: estaPublicando ? null : aoEnviar,
+          icon: estaPublicando
+              ? const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.send_rounded),
+        ),
+      ],
+    );
+  }
+}
+
+String _formateDuracao(Duration duracao) {
+  int minutos = duracao.inMinutes;
+  int segundos = duracao.inSeconds.remainder(60);
+  return '$minutos:${segundos.toString().padLeft(2, '0')}';
 }
 
 class _DialogoDeNovaPublicacao extends StatefulWidget {

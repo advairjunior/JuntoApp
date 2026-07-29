@@ -38,6 +38,8 @@ class MidiaSelecionada {
   final Uint8List conteudo;
 
   bool get ehVideo => tipoDeConteudo.toLowerCase().startsWith('video/');
+
+  bool get ehAudio => tipoDeConteudo.toLowerCase().startsWith('audio/');
 }
 
 abstract interface class ISeletorDeImagem {

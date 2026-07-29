@@ -14,6 +14,8 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/erros/excecao_da_
 import 'package:projeto_encontros_aplicativo_web/compartilhado/imagens/repositorio_de_imagens_privadas.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/instalacao/contrato_do_servico_de_instalacao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/instalacao/servico_de_instalacao.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/midias/contrato_do_gravador_de_audio.dart';
+import 'package:projeto_encontros_aplicativo_web/compartilhado/midias/provedor_do_gravador_de_audio.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/combinados/dados/repositorio_de_combinados.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/combinados/modelos/item_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/convites_por_link/dados/repositorio_de_convites_por_link.dart';
@@ -530,6 +532,11 @@ void main() {
       find.widgetWithText(TextFormField, 'Nome ou endereço do local'),
       'Casa da Bia',
     );
+    await testador.pump();
+    OutlinedButton botaoDeBuscaDoLocal = testador.widget<OutlinedButton>(
+      find.byKey(const Key('selecionar-ponto-no-mapa')),
+    );
+    expect(botaoDeBuscaDoLocal.onPressed, isNotNull);
     await testador.scrollUntilVisible(
       find.byKey(const Key('botao-criar-encontro')),
       300,
@@ -1103,8 +1110,51 @@ void main() {
     await testador.tap(find.text('Café de domingo'));
     await testador.pumpAndSettle();
 
-    await testador.tap(
-      find.byKey(const Key('abrir-perfil-usuario-2')),
+    Finder areaDoAvatar = find.byKey(
+      const Key('abrir-perfil-usuario-2'),
+    );
+    Finder fotoDoAvatar = find.byKey(
+      const Key('foto-do-feed-usuario-2'),
+    );
+    Rect retanguloDaArea = testador.getRect(areaDoAvatar);
+    Rect retanguloDaFoto = testador.getRect(fotoDoAvatar);
+
+    expect(retanguloDaArea.size, const Size(48, 48));
+    expect(retanguloDaFoto.size, const Size(32, 32));
+    expect(retanguloDaArea.center.dx, retanguloDaFoto.center.dx);
+    expect(retanguloDaArea.center.dy, retanguloDaFoto.center.dy);
+
+    await testador.dragFrom(
+      retanguloDaArea.center,
+      const Offset(0, -40),
+    );
+    await testador.pumpAndSettle();
+    expect(
+      find.byKey(const Key('ampliar-foto-do-perfil-usuario-2')),
+      findsNothing,
+    );
+    retanguloDaArea = testador.getRect(areaDoAvatar);
+    retanguloDaFoto = testador.getRect(fotoDoAvatar);
+
+    await testador.tapAt(
+      Offset(retanguloDaArea.center.dx, retanguloDaArea.top - 2),
+    );
+    await testador.pumpAndSettle();
+    expect(
+      find.byKey(const Key('ampliar-foto-do-perfil-usuario-2')),
+      findsNothing,
+    );
+    await testador.tapAt(
+      Offset(retanguloDaArea.center.dx, retanguloDaArea.bottom + 2),
+    );
+    await testador.pumpAndSettle();
+    expect(
+      find.byKey(const Key('ampliar-foto-do-perfil-usuario-2')),
+      findsNothing,
+    );
+
+    await testador.tapAt(
+      Offset(retanguloDaFoto.right - 1, retanguloDaFoto.bottom - 1),
     );
     await testador.pumpAndSettle();
 
@@ -1140,7 +1190,11 @@ void main() {
 
     expect(encontros.ultimoIdentificadorDoUsuarioConvidado, 'usuario-2');
     expect(find.textContaining('foi convidado(a)'), findsOneWidget);
-  });
+  },
+      variant: const TargetPlatformVariant(<TargetPlatform>{
+        TargetPlatform.android,
+        TargetPlatform.windows,
+      }));
 
   testWidgets('deve apresentar estado vazio dos momentos', (
     WidgetTester testador,
@@ -1235,6 +1289,7 @@ void main() {
       find.byKey(const Key('texto-da-nova-publicacao')),
       'Levo o bolo.',
     );
+    await testador.pump();
     await testador.tap(find.byKey(const Key('publicar-momento')));
     await testador.pumpAndSettle();
 
@@ -1279,6 +1334,7 @@ void main() {
       find.byKey(const Key('texto-da-nova-publicacao')),
       'Pode deixar!',
     );
+    await testador.pump();
     await testador.tap(find.byKey(const Key('publicar-momento')));
     await testador.pumpAndSettle();
 
@@ -1371,6 +1427,7 @@ void main() {
     );
     TextField campoDeTexto = testador.widget<TextField>(campo);
     expect(campoDeTexto.controller?.text, isEmpty);
+    expect(campoDeTexto.focusNode?.hasFocus, isTrue);
   });
 
   testWidgets('deve quebrar a linha ao pressionar Shift e Enter', (
@@ -1427,6 +1484,7 @@ void main() {
       find.byKey(const Key('texto-da-nova-publicacao')),
       'Não quero perder este texto.',
     );
+    await testador.pump();
     await testador.tap(find.byKey(const Key('publicar-momento')));
     await testador.pumpAndSettle();
 
@@ -1503,6 +1561,233 @@ void main() {
 
     expect(repositorioDeMemorias.ultimaMemoriaRemovida, 'memoria-nova');
     expect(find.byKey(const Key('publicacao-memoria-nova')), findsNothing);
+  });
+
+  testWidgets('deve gravar e enviar um audio pelo compositor no desktop', (
+    WidgetTester testador,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    RepositorioDeMemoriasDoEncontroFalso memorias =
+        RepositorioDeMemoriasDoEncontroFalso();
+    GravadorDeAudioFalso gravador = GravadorDeAudioFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        repositorioDeMemorias: memorias,
+        gravadorDeAudio: gravador,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+
+    expect(find.byKey(const Key('gravar-audio')), findsOneWidget);
+    expect(find.byKey(const Key('publicar-momento')), findsNothing);
+    await testador.enterText(
+      find.byKey(const Key('texto-da-nova-publicacao')),
+      'Mensagem pronta',
+    );
+    await testador.pump();
+    expect(find.byKey(const Key('gravar-audio')), findsNothing);
+    expect(find.byKey(const Key('publicar-momento')), findsOneWidget);
+    await testador.enterText(
+      find.byKey(const Key('texto-da-nova-publicacao')),
+      '',
+    );
+    await testador.pump();
+
+    await testador.tap(find.byKey(const Key('gravar-audio')));
+    await testador.pump();
+
+    expect(gravador.quantidadeDeInicios, 1);
+    expect(find.text('0:00'), findsOneWidget);
+    expect(
+      find.byKey(const Key('cancelar-gravacao-de-audio')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('enviar-gravacao-de-audio')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('gravar-audio')), findsNothing);
+
+    await testador.pump(const Duration(seconds: 2));
+    await testador.tap(
+      find.byKey(const Key('enviar-gravacao-de-audio')),
+    );
+    await testador.tap(
+      find.byKey(const Key('enviar-gravacao-de-audio')),
+    );
+    await testador.pumpAndSettle();
+
+    expect(memorias.ultimoTipoDeConteudo, 'audio/webm');
+    expect(memorias.quantidadeDaUltimaPublicacao, 1);
+    expect(memorias.quantidadeDePublicacoes, 1);
+    expect(gravador.quantidadeDeFinalizacoes, 1);
+    expect(
+      find.byKey(const Key('remover-audio-memoria-nova')),
+      findsOneWidget,
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('toque curto no microfone nao deve iniciar gravacao no mobile', (
+    WidgetTester testador,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    GravadorDeAudioFalso gravador = GravadorDeAudioFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true),
+        gravadorDeAudio: gravador,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+
+    TestGesture gesto = await testador.startGesture(
+      testador.getCenter(find.byKey(const Key('gravar-audio'))),
+    );
+    await testador.pump(const Duration(milliseconds: 200));
+    await gesto.up();
+    await testador.pumpAndSettle();
+
+    expect(gravador.quantidadeDeInicios, 0);
+    TestGesture gestoVertical = await testador.startGesture(
+      testador.getCenter(find.byKey(const Key('gravar-audio'))),
+    );
+    await gestoVertical.moveBy(const Offset(0, -40));
+    await testador.pump(const Duration(milliseconds: 500));
+    await gestoVertical.up();
+    await testador.pumpAndSettle();
+
+    expect(gravador.quantidadeDeInicios, 0);
+    expect(
+      find.byKey(const Key('cancelar-gravacao-de-audio')),
+      findsNothing,
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('segurar e soltar deve enviar audio no mobile', (
+    WidgetTester testador,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    RepositorioDeMemoriasDoEncontroFalso memorias =
+        RepositorioDeMemoriasDoEncontroFalso();
+    GravadorDeAudioFalso gravador = GravadorDeAudioFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true),
+        repositorioDeMemorias: memorias,
+        gravadorDeAudio: gravador,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+
+    TestGesture gesto = await testador.startGesture(
+      testador.getCenter(find.byKey(const Key('gravar-audio'))),
+    );
+    await testador.pump(const Duration(milliseconds: 500));
+
+    expect(gravador.quantidadeDeInicios, 1);
+    expect(find.text('Deslize para a esquerda para cancelar'), findsOneWidget);
+    expect(
+      find.byKey(const Key('cancelar-gravacao-de-audio')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('enviar-gravacao-de-audio')),
+      findsOneWidget,
+    );
+
+    await gesto.up();
+    await testador.pumpAndSettle();
+
+    expect(gravador.quantidadeDeFinalizacoes, 1);
+    expect(memorias.ultimoTipoDeConteudo, 'audio/webm');
+    expect(memorias.quantidadeDaUltimaPublicacao, 1);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('arrastar para a esquerda deve cancelar audio no mobile', (
+    WidgetTester testador,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    RepositorioDeMemoriasDoEncontroFalso memorias =
+        RepositorioDeMemoriasDoEncontroFalso();
+    GravadorDeAudioFalso gravador = GravadorDeAudioFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true),
+        repositorioDeMemorias: memorias,
+        gravadorDeAudio: gravador,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+
+    TestGesture gesto = await testador.startGesture(
+      testador.getCenter(find.byKey(const Key('gravar-audio'))),
+    );
+    await testador.pump(const Duration(milliseconds: 500));
+    await gesto.moveBy(const Offset(-90, 0));
+    await testador.pumpAndSettle();
+    await gesto.up();
+    await testador.pumpAndSettle();
+
+    expect(gravador.quantidadeDeCancelamentos, 1);
+    expect(gravador.quantidadeDeFinalizacoes, 0);
+    expect(memorias.quantidadeDaUltimaPublicacao, 0);
+    expect(find.byKey(const Key('gravar-audio')), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('deve liberar o compositor quando o microfone for negado', (
+    WidgetTester testador,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    GravadorDeAudioFalso gravador = GravadorDeAudioFalso(
+      deveFalharAoIniciar: true,
+    );
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true),
+        gravadorDeAudio: gravador,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+    await testador.tap(find.byKey(const Key('gravar-audio')));
+    await testador.pumpAndSettle();
+
+    expect(
+      find.textContaining('Não foi possível acessar o microfone'),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('gravar-audio')), findsOneWidget);
+    expect(
+      find.byKey(const Key('cancelar-gravacao-de-audio')),
+      findsNothing,
+    );
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('deve abrir a galeria privada pelos detalhes do encontro', (
@@ -2319,6 +2604,7 @@ ProviderScope _crieAplicativo(
   ISeletorDeImagem? seletorDeImagem,
   IRepositorioDeImagensPrivadas? repositorioDeImagens,
   IServicoDeInstalacao? servicoDeInstalacao,
+  IGravadorDeAudio? gravadorDeAudio,
 }) {
   return ProviderScope(
     overrides: [
@@ -2363,6 +2649,8 @@ ProviderScope _crieAplicativo(
       ),
       if (servicoDeInstalacao != null)
         provedorDoServicoDeInstalacao.overrideWithValue(servicoDeInstalacao),
+      if (gravadorDeAudio != null)
+        provedorDoGravadorDeAudio.overrideWithValue(gravadorDeAudio),
     ],
     child: const Aplicativo(),
   );
@@ -2564,8 +2852,10 @@ class RepositorioDeMemoriasDoEncontroFalso
   final bool comMemoriaInicial;
   String? ultimaLegenda;
   String? ultimoNomeDoArquivo;
+  String? ultimoTipoDeConteudo;
   String? ultimaMemoriaRemovida;
   int quantidadeDaUltimaPublicacao = 0;
+  int quantidadeDePublicacoes = 0;
 
   @override
   Future<void> removaAsync({
@@ -2601,7 +2891,9 @@ class RepositorioDeMemoriasDoEncontroFalso
   }) async {
     ultimaLegenda = legenda;
     ultimoNomeDoArquivo = midias.first.nome;
+    ultimoTipoDeConteudo = midias.first.tipoDeConteudo;
     quantidadeDaUltimaPublicacao = midias.length;
+    quantidadeDePublicacoes++;
 
     return _crieMemoria(
       identificadorDoEncontro: identificadorDoEncontro,
@@ -2609,6 +2901,7 @@ class RepositorioDeMemoriasDoEncontroFalso
       identificadorDaMidia: 'midia-nova',
       legenda: legenda,
       quantidadeDeMidias: midias.length,
+      tipoDeConteudo: midias.first.tipoDeConteudo,
     );
   }
 
@@ -2618,6 +2911,7 @@ class RepositorioDeMemoriasDoEncontroFalso
     required String identificadorDaMidia,
     String? legenda,
     int quantidadeDeMidias = 1,
+    String tipoDeConteudo = 'image/png',
   }) {
     return MemoriaDoEncontro(
       identificador: identificador,
@@ -2635,12 +2929,51 @@ class RepositorioDeMemoriasDoEncontroFalso
               : '$identificadorDaMidia-$indice',
           url:
               '/api/encontros/$identificadorDoEncontro/memorias/$identificador/midias/$identificadorDaMidia-$indice/conteudo',
-          tipoDeConteudo: 'image/png',
+          tipoDeConteudo: tipoDeConteudo,
           tamanhoEmBytes: 3,
         ),
       ),
     );
   }
+}
+
+class GravadorDeAudioFalso implements IGravadorDeAudio {
+  GravadorDeAudioFalso({this.deveFalharAoIniciar = false});
+
+  final bool deveFalharAoIniciar;
+  int quantidadeDeInicios = 0;
+  int quantidadeDeCancelamentos = 0;
+  int quantidadeDeFinalizacoes = 0;
+
+  @override
+  bool get estaDisponivel => true;
+
+  @override
+  Future<void> inicieAsync() async {
+    quantidadeDeInicios++;
+    if (deveFalharAoIniciar) {
+      throw StateError('Permissão negada.');
+    }
+  }
+
+  @override
+  Future<AudioGravado?> finalizeAsync(Duration duracao) async {
+    quantidadeDeFinalizacoes++;
+    return AudioGravado(
+      bytes: Uint8List.fromList(<int>[0x1A, 0x45, 0xDF, 0xA3]),
+      nomeDoArquivo: 'audio.webm',
+      tipoDeConteudo: 'audio/webm',
+      duracao: duracao,
+    );
+  }
+
+  @override
+  Future<void> canceleAsync() async {
+    quantidadeDeCancelamentos++;
+  }
+
+  @override
+  void descarte() {}
 }
 
 class RepositorioDePublicacoesDoEncontroFalso

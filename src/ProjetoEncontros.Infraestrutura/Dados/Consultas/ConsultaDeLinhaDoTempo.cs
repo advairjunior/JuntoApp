@@ -194,7 +194,9 @@ public sealed class ConsultaDeLinhaDoTempo(ContextoDeBanco contextoDeBanco) : IC
             .ToDictionary(memoria => memoria.Identificador, memoria => memoria.IdentificadorDoEncontro);
         List<MidiaDaMemoria> midias = await contextoDeBanco.MidiasDaMemoria
             .AsNoTracking()
-            .Where(midia => identificadoresDasMemorias.Contains(midia.IdentificadorDaMemoria))
+            .Where(midia =>
+                identificadoresDasMemorias.Contains(midia.IdentificadorDaMemoria) &&
+                midia.TipoDeConteudo.StartsWith("image/"))
             .OrderBy(midia => midia.CriadoEm)
             .ToListAsync(cancellationToken);
 

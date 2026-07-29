@@ -63,6 +63,11 @@ class PublicacaoDoEncontro {
       temMidia &&
       tipoDeConteudoDaMidia != null &&
       tipoDeConteudoDaMidia!.toLowerCase().startsWith('image/');
+
+  bool get ehAudio =>
+      temMidia &&
+      tipoDeConteudoDaMidia != null &&
+      tipoDeConteudoDaMidia!.toLowerCase().startsWith('audio/');
 }
 
 class PublicacaoRespondida {
