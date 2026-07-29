@@ -1104,11 +1104,99 @@ class _ResumoDoEncontro extends ConsumerWidget {
       return;
     }
 
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext contextoDaFolha) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              EspacamentosDoAplicativo.padrao,
+              0,
+              EspacamentosDoAplicativo.padrao,
+              EspacamentosDoAplicativo.padrao,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const Text(
+                  'Abrir localização',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: EspacamentosDoAplicativo.minimo),
+                const Text(
+                  'Escolha o aplicativo que deseja usar para chegar ao encontro.',
+                  style: TextStyle(color: CoresDoAplicativo.textoSecundario),
+                ),
+                const SizedBox(height: EspacamentosDoAplicativo.padrao),
+                _OpcaoDeAplicativoDeMapa(
+                  chave: const Key('abrir-no-google-maps'),
+                  icone: Icons.map_outlined,
+                  titulo: 'Google Maps',
+                  aoTocar: () {
+                    Navigator.of(contextoDaFolha).pop();
+                    _abraNoAplicativoDeMapaAsync(
+                      context,
+                      ref,
+                      AplicativoDeMapa.googleMaps,
+                      latitude,
+                      longitude,
+                    );
+                  },
+                ),
+                _OpcaoDeAplicativoDeMapa(
+                  chave: const Key('abrir-no-apple-maps'),
+                  icone: Icons.navigation_outlined,
+                  titulo: 'Mapas da Apple',
+                  aoTocar: () {
+                    Navigator.of(contextoDaFolha).pop();
+                    _abraNoAplicativoDeMapaAsync(
+                      context,
+                      ref,
+                      AplicativoDeMapa.appleMaps,
+                      latitude,
+                      longitude,
+                    );
+                  },
+                ),
+                _OpcaoDeAplicativoDeMapa(
+                  chave: const Key('abrir-no-waze'),
+                  icone: Icons.directions_car_outlined,
+                  titulo: 'Waze',
+                  aoTocar: () {
+                    Navigator.of(contextoDaFolha).pop();
+                    _abraNoAplicativoDeMapaAsync(
+                      context,
+                      ref,
+                      AplicativoDeMapa.waze,
+                      latitude,
+                      longitude,
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _abraNoAplicativoDeMapaAsync(
+    BuildContext context,
+    WidgetRef ref,
+    AplicativoDeMapa aplicativo,
+    double latitude,
+    double longitude,
+  ) async {
     try {
       bool abriu =
           await ref.read(provedorDoServicoDeLocalizacao).abraNoMapaAsync(
                 latitude: latitude,
                 longitude: longitude,
+                aplicativo: aplicativo,
+                descricao: encontro.local,
               );
 
       if (!abriu && context.mounted) {
@@ -1127,6 +1215,33 @@ class _ResumoDoEncontro extends ConsumerWidget {
         );
       }
     }
+  }
+}
+
+class _OpcaoDeAplicativoDeMapa extends StatelessWidget {
+  const _OpcaoDeAplicativoDeMapa({
+    required this.chave,
+    required this.icone,
+    required this.titulo,
+    required this.aoTocar,
+  });
+
+  final Key chave;
+  final IconData icone;
+  final String titulo;
+  final VoidCallback aoTocar;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      key: chave,
+      minTileHeight: 52,
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(icone, color: CoresDoAplicativo.azulInteracao),
+      title: Text(titulo),
+      trailing: const Icon(Icons.open_in_new_rounded, size: 18),
+      onTap: aoTocar,
+    );
   }
 }
 

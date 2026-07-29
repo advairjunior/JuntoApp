@@ -19,12 +19,16 @@ class EstruturaComNavegacao extends StatelessWidget {
   final Widget filho;
 
   int get _indiceSelecionado {
-    if (caminhoAtual.startsWith('/memorias')) {
+    if (caminhoAtual.startsWith('/pessoas')) {
       return 1;
     }
 
-    if (caminhoAtual.startsWith('/perfil')) {
+    if (caminhoAtual.startsWith('/memorias')) {
       return 2;
+    }
+
+    if (caminhoAtual.startsWith('/perfil')) {
+      return 3;
     }
 
     return 0;
@@ -72,7 +76,8 @@ class EstruturaComNavegacao extends StatelessWidget {
   void _navegue(BuildContext context, int indice) {
     String destino = switch (indice) {
       0 => '/inicio',
-      1 => '/memorias',
+      1 => '/pessoas',
+      2 => '/memorias',
       _ => '/perfil',
     };
 
@@ -122,18 +127,25 @@ class _DockDeNavegacao extends StatelessWidget {
                     aoTocar: () => aoSelecionar(0),
                   ),
                   _ItemDoDock(
+                    rotulo: 'Pessoas',
+                    icone: Icons.people_outline_rounded,
+                    iconeSelecionado: Icons.people_rounded,
+                    selecionado: indiceSelecionado == 1,
+                    aoTocar: () => aoSelecionar(1),
+                  ),
+                  _ItemDoDock(
                     rotulo: 'Memórias',
                     icone: Icons.photo_library_outlined,
                     iconeSelecionado: Icons.photo_library_rounded,
-                    selecionado: indiceSelecionado == 1,
-                    aoTocar: () => aoSelecionar(1),
+                    selecionado: indiceSelecionado == 2,
+                    aoTocar: () => aoSelecionar(2),
                   ),
                   _ItemDoDock(
                     rotulo: 'Perfil',
                     icone: Icons.person_outline_rounded,
                     iconeSelecionado: Icons.person_rounded,
-                    selecionado: indiceSelecionado == 2,
-                    aoTocar: () => aoSelecionar(2),
+                    selecionado: indiceSelecionado == 3,
+                    aoTocar: () => aoSelecionar(3),
                   ),
                 ],
               ),
@@ -163,7 +175,7 @@ class _ItemDoDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Color cor = selecionado
-        ? CoresDoAplicativo.verdeDestaque
+        ? CoresDoAplicativo.textoPrincipal
         : CoresDoAplicativo.textoTerciario;
 
     return Expanded(
@@ -193,6 +205,16 @@ class _ItemDoDock extends StatelessWidget {
                     color: cor,
                     fontSize: 11,
                     fontWeight: selecionado ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: selecionado ? 5 : 0,
+                  height: 5,
+                  decoration: const BoxDecoration(
+                    color: CoresDoAplicativo.verdeDestaque,
+                    shape: BoxShape.circle,
                   ),
                 ),
               ],

@@ -29,7 +29,7 @@ class EstadoVazio extends StatelessWidget {
           Icon(
             icone,
             size: 42,
-            color: CoresDoAplicativo.verdeDestaque,
+            color: CoresDoAplicativo.azulInteracao,
           ),
           const SizedBox(height: EspacamentosDoAplicativo.padrao),
           Text(

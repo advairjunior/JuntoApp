@@ -104,7 +104,7 @@ class _EstadoDoSeletorDeLocalizacaoNoMapa
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                             const Text(
-                              'Digite o nome do lugar, rua ou endereço.',
+                              'Digite o nome do lugar, rua ou endereço em Goiânia.',
                               style: TextStyle(
                                 color: CoresDoAplicativo.textoSecundario,
                               ),
@@ -126,7 +126,7 @@ class _EstadoDoSeletorDeLocalizacaoNoMapa
                     textInputAction: TextInputAction.search,
                     onSubmitted: (_) => _busqueAsync(),
                     decoration: InputDecoration(
-                      labelText: 'Nome do local ou endereço',
+                      labelText: 'Local ou endereço em Goiânia',
                       prefixIcon: const Icon(Icons.search_rounded),
                       suffixIcon: IconButton(
                         key: const Key('buscar-localizacao'),
@@ -288,7 +288,7 @@ class _EstadoDoSeletorDeLocalizacaoNoMapa
       setState(() {
         _resultados = resultados;
         _mensagemDaBusca = resultados.isEmpty
-            ? 'Nenhum local encontrado. Inclua cidade e estado e tente novamente.'
+            ? 'Nenhum local encontrado em Goiânia. Tente o endereço completo ou marque o ponto no mapa.'
             : null;
       });
     } on Object {

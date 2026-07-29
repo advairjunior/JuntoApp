@@ -986,6 +986,171 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
     }
 
     [Fact]
+    public async Task HistoricoComPessoa_DeveRespeitarPrivacidadeECalcularSomenteDadosConfirmados()
+    {
+        await fabricaDaApi.ReinicieBancoAsync();
+        HttpClient clienteAna = fabricaDaApi.CrieCliente();
+        HttpClient clienteBruno = fabricaDaApi.CrieCliente();
+        HttpClient clienteCarla = fabricaDaApi.CrieCliente();
+
+        await CadastreUsuarioAsync(clienteAna, "Ana Relação", "ana.relacao@email.com", "senha-segura");
+        await CadastreUsuarioAsync(clienteBruno, "Bruno Relação", "bruno.relacao@email.com", "senha-segura");
+        await CadastreUsuarioAsync(clienteCarla, "Carla Privada", "carla.privada@email.com", "senha-segura");
+        RespostaDeLogin loginAna = await AutentiqueUsuarioAsync(
+            clienteAna,
+            "ana.relacao@email.com",
+            "senha-segura");
+        RespostaDeLogin loginBruno = await AutentiqueUsuarioAsync(
+            clienteBruno,
+            "bruno.relacao@email.com",
+            "senha-segura");
+        RespostaDeLogin loginCarla = await AutentiqueUsuarioAsync(
+            clienteCarla,
+            "carla.privada@email.com",
+            "senha-segura");
+        clienteAna.DefaultRequestHeaders.Authorization = new("Bearer", loginAna.TokenDeAcesso);
+        clienteBruno.DefaultRequestHeaders.Authorization = new("Bearer", loginBruno.TokenDeAcesso);
+        clienteCarla.DefaultRequestHeaders.Authorization = new("Bearer", loginCarla.TokenDeAcesso);
+
+        RespostaDeUsuarioAtual perfilBruno = await ObtenhaUsuarioAtualAsync(clienteBruno);
+        RespostaDeUsuarioAtual perfilCarla = await ObtenhaUsuarioAtualAsync(clienteCarla);
+
+        RespostaDeEncontroCriado realizadoEmComum = await CrieEncontroDiretoAsync(
+            clienteAna,
+            "Almoço em comum",
+            null,
+            "Casa da Ana",
+            new(2027, 4, 10, 12, 0, 0, TimeSpan.FromHours(-3)));
+        await ConvideParaEncontroDiretoAsync(
+            clienteAna,
+            realizadoEmComum.Identificador,
+            "bruno.relacao@email.com");
+        await ConfirmePresencaDiretaAsync(clienteBruno, realizadoEmComum.Identificador);
+        await MarqueEncontroDiretoComoRealizadoAsync(clienteAna, realizadoEmComum.Identificador);
+
+        RespostaDeEncontroCriado proximoEmComum = await CrieEncontroDiretoAsync(
+            clienteAna,
+            "Cinema em comum",
+            "Filme escolhido pelos dois",
+            "Cinema",
+            new(2028, 5, 12, 19, 30, 0, TimeSpan.FromHours(-3)));
+        await ConvideParaEncontroDiretoAsync(
+            clienteAna,
+            proximoEmComum.Identificador,
+            "bruno.relacao@email.com");
+        await ConfirmePresencaDiretaAsync(clienteBruno, proximoEmComum.Identificador);
+
+        RespostaDeEncontroCriado privadoDaCarla = await CrieEncontroDiretoAsync(
+            clienteCarla,
+            "Evento secreto da Carla",
+            null,
+            "Local privado",
+            new(2027, 6, 10, 20, 0, 0, TimeSpan.FromHours(-3)));
+        await ConvideParaEncontroDiretoAsync(
+            clienteCarla,
+            privadoDaCarla.Identificador,
+            "bruno.relacao@email.com");
+        await ConfirmePresencaDiretaAsync(clienteBruno, privadoDaCarla.Identificador);
+        await MarqueEncontroDiretoComoRealizadoAsync(clienteCarla, privadoDaCarla.Identificador);
+
+        HttpResponseMessage resposta = await clienteAna.GetAsync(
+            $"/api/pessoas-frequentes/{perfilBruno.Identificador}/historico?pagina=1&tamanho=1");
+        await GarantaStatusAsync(resposta, HttpStatusCode.OK);
+        string conteudo = await resposta.Content.ReadAsStringAsync();
+        using JsonDocument documento = JsonDocument.Parse(conteudo);
+        JsonElement raiz = documento.RootElement;
+
+        Assert.Equal(2, raiz.GetProperty("quantidadeDeEncontrosEmComum").GetInt32());
+        Assert.Equal(1, raiz.GetProperty("quantidadeDeEncontrosRealizadosJuntos").GetInt32());
+        Assert.Single(raiz.GetProperty("proximosEncontros").EnumerateArray());
+        Assert.Equal(
+            "Cinema em comum",
+            raiz.GetProperty("proximosEncontros")[0].GetProperty("titulo").GetString());
+        Assert.Single(raiz.GetProperty("historico").GetProperty("itens").EnumerateArray());
+        Assert.Equal(
+            "Almoço em comum",
+            raiz.GetProperty("historico").GetProperty("itens")[0].GetProperty("titulo").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            raiz.GetProperty("estatisticas").GetProperty("mediaDeDiasEntreEncontros").ValueKind);
+        Assert.DoesNotContain("Evento secreto da Carla", conteudo, StringComparison.Ordinal);
+
+        HttpResponseMessage respostaSemRelacao = await clienteAna.GetAsync(
+            $"/api/pessoas-frequentes/{perfilCarla.Identificador}/historico");
+        await GarantaStatusAsync(respostaSemRelacao, HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task HistoricoComPessoa_DevePaginarEncontrosRealizados()
+    {
+        await fabricaDaApi.ReinicieBancoAsync();
+        HttpClient clienteAna = fabricaDaApi.CrieCliente();
+        HttpClient clienteBruno = fabricaDaApi.CrieCliente();
+
+        await CadastreUsuarioAsync(clienteAna, "Ana Paginada", "ana.paginada@email.com", "senha-segura");
+        await CadastreUsuarioAsync(clienteBruno, "Bruno Paginado", "bruno.paginado@email.com", "senha-segura");
+        RespostaDeLogin loginAna = await AutentiqueUsuarioAsync(
+            clienteAna,
+            "ana.paginada@email.com",
+            "senha-segura");
+        RespostaDeLogin loginBruno = await AutentiqueUsuarioAsync(
+            clienteBruno,
+            "bruno.paginado@email.com",
+            "senha-segura");
+        clienteAna.DefaultRequestHeaders.Authorization = new("Bearer", loginAna.TokenDeAcesso);
+        clienteBruno.DefaultRequestHeaders.Authorization = new("Bearer", loginBruno.TokenDeAcesso);
+        RespostaDeUsuarioAtual perfilBruno = await ObtenhaUsuarioAtualAsync(clienteBruno);
+
+        RespostaDeEncontroCriado primeiro = await CrieEncontroDiretoAsync(
+            clienteAna,
+            "Primeiro encontro",
+            null,
+            "Praça",
+            new(2027, 1, 10, 18, 0, 0, TimeSpan.FromHours(-3)));
+        await ConvideParaEncontroDiretoAsync(
+            clienteAna,
+            primeiro.Identificador,
+            "bruno.paginado@email.com");
+        await ConfirmePresencaDiretaAsync(clienteBruno, primeiro.Identificador);
+        await MarqueEncontroDiretoComoRealizadoAsync(clienteAna, primeiro.Identificador);
+
+        RespostaDeEncontroCriado segundo = await CrieEncontroDiretoAsync(
+            clienteAna,
+            "Segundo encontro",
+            null,
+            "Parque",
+            new(2027, 2, 10, 18, 0, 0, TimeSpan.FromHours(-3)));
+        await ConvideParaEncontroDiretoAsync(
+            clienteAna,
+            segundo.Identificador,
+            "bruno.paginado@email.com");
+        await ConfirmePresencaDiretaAsync(clienteBruno, segundo.Identificador);
+        await MarqueEncontroDiretoComoRealizadoAsync(clienteAna, segundo.Identificador);
+
+        HttpResponseMessage respostaDaPrimeiraPagina = await clienteAna.GetAsync(
+            $"/api/pessoas-frequentes/{perfilBruno.Identificador}/historico?pagina=1&tamanho=1");
+        await GarantaStatusAsync(respostaDaPrimeiraPagina, HttpStatusCode.OK);
+        using JsonDocument primeiraPagina = JsonDocument.Parse(
+            await respostaDaPrimeiraPagina.Content.ReadAsStringAsync());
+        JsonElement primeiroHistorico = primeiraPagina.RootElement.GetProperty("historico");
+        Assert.True(primeiroHistorico.GetProperty("temProximaPagina").GetBoolean());
+        Assert.Equal(
+            "Segundo encontro",
+            primeiroHistorico.GetProperty("itens")[0].GetProperty("titulo").GetString());
+
+        HttpResponseMessage respostaDaSegundaPagina = await clienteAna.GetAsync(
+            $"/api/pessoas-frequentes/{perfilBruno.Identificador}/historico?pagina=2&tamanho=1");
+        await GarantaStatusAsync(respostaDaSegundaPagina, HttpStatusCode.OK);
+        using JsonDocument segundaPagina = JsonDocument.Parse(
+            await respostaDaSegundaPagina.Content.ReadAsStringAsync());
+        JsonElement segundoHistorico = segundaPagina.RootElement.GetProperty("historico");
+        Assert.False(segundoHistorico.GetProperty("temProximaPagina").GetBoolean());
+        Assert.Equal(
+            "Primeiro encontro",
+            segundoHistorico.GetProperty("itens")[0].GetProperty("titulo").GetString());
+    }
+
+    [Fact]
     public async Task EncontrosPassados_DeveListarSomenteHistoricoDoUsuario()
     {
         await fabricaDaApi.ReinicieBancoAsync();
@@ -2068,6 +2233,17 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
             null);
 
         await GarantaStatusAsync(respostaDePresenca, HttpStatusCode.BadRequest);
+
+        using MultipartFormDataContent corpoDaMemoria = new();
+        ByteArrayContent conteudoDaFoto = new(ConteudoPngValido);
+        conteudoDaFoto.Headers.ContentType = new("image/png");
+        corpoDaMemoria.Add(conteudoDaFoto, "arquivos", "memoria.png");
+
+        HttpResponseMessage respostaDaMemoria = await cliente.PostAsync(
+            $"/api/encontros/{encontroCriado.Identificador}/memorias",
+            corpoDaMemoria);
+
+        await GarantaStatusAsync(respostaDaMemoria, HttpStatusCode.BadRequest);
     }
 
     [Fact]
@@ -2216,6 +2392,15 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         await GarantaStatusAsync(resposta, HttpStatusCode.OK);
 
         return await LeiaJsonAsync<RespostaDeLogin>(resposta);
+    }
+
+    private static async Task<RespostaDeUsuarioAtual> ObtenhaUsuarioAtualAsync(
+        HttpClient cliente)
+    {
+        HttpResponseMessage resposta = await cliente.GetAsync("/api/usuarios/eu");
+        await GarantaStatusAsync(resposta, HttpStatusCode.OK);
+
+        return await LeiaJsonAsync<RespostaDeUsuarioAtual>(resposta);
     }
 
     private static async Task<RespostaDeGrupoCriado> CrieGrupoAsync(HttpClient cliente, string nome)

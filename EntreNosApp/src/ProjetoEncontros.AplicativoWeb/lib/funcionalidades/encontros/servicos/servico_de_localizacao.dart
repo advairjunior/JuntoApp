@@ -14,12 +14,20 @@ class CoordenadasDoEncontro {
   final String? descricao;
 }
 
+enum AplicativoDeMapa {
+  googleMaps,
+  appleMaps,
+  waze,
+}
+
 abstract interface class IServicoDeLocalizacao {
   Future<CoordenadasDoEncontro> obtenhaPosicaoAtualAsync();
 
   Future<bool> abraNoMapaAsync({
     required double latitude,
     required double longitude,
+    required AplicativoDeMapa aplicativo,
+    String? descricao,
   });
 }
 
@@ -47,13 +55,60 @@ class ServicoDeLocalizacao implements IServicoDeLocalizacao {
   Future<bool> abraNoMapaAsync({
     required double latitude,
     required double longitude,
+    required AplicativoDeMapa aplicativo,
+    String? descricao,
   }) {
     String latitudeFormatada = latitude.toStringAsFixed(6);
     String longitudeFormatada = longitude.toStringAsFixed(6);
-    Uri endereco = Uri.parse(
-      'https://www.openstreetmap.org/?mlat=$latitudeFormatada&mlon=$longitudeFormatada#map=18/$latitudeFormatada/$longitudeFormatada',
+    Uri endereco = crieEnderecoDoMapa(
+      aplicativo: aplicativo,
+      latitude: latitudeFormatada,
+      longitude: longitudeFormatada,
+      descricao: descricao,
     );
 
     return launchUrl(endereco, mode: LaunchMode.externalApplication);
   }
+}
+
+Uri crieEnderecoDoMapa({
+  required AplicativoDeMapa aplicativo,
+  required String latitude,
+  required String longitude,
+  String? descricao,
+}) {
+  String destino = '$latitude,$longitude';
+  String nomeDoDestino = descricao?.trim().isNotEmpty == true
+      ? descricao!.trim()
+      : 'Local do encontro';
+
+  return switch (aplicativo) {
+    AplicativoDeMapa.googleMaps => Uri.https(
+        'www.google.com',
+        '/maps/dir/',
+        <String, String>{
+          'api': '1',
+          'destination': destino,
+          'travelmode': 'driving',
+        },
+      ),
+    AplicativoDeMapa.appleMaps => Uri.https(
+        'maps.apple.com',
+        '/',
+        <String, String>{
+          'daddr': destino,
+          'q': nomeDoDestino,
+          'dirflg': 'd',
+        },
+      ),
+    AplicativoDeMapa.waze => Uri.https(
+        'waze.com',
+        '/ul',
+        <String, String>{
+          'll': destino,
+          'navigate': 'yes',
+          'utm_source': 'junto',
+        },
+      ),
+  };
 }

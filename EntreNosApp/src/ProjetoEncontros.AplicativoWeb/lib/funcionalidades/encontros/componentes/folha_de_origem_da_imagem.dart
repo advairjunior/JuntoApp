@@ -23,10 +23,18 @@ Future<EnumeradorDeOrigemDaImagem?> escolhaOrigemDaImagemAsync(
               const SizedBox(height: EspacamentosDoAplicativo.medio),
               ListTile(
                 key: const Key('tirar-foto-pela-camera'),
-                leading: const Icon(Icons.camera_alt_outlined),
-                title: const Text('Tirar foto'),
+                leading: const Icon(Icons.camera_front_outlined),
+                title: const Text('Câmera frontal'),
                 onTap: () => Navigator.of(contextoDaFolha).pop(
-                  EnumeradorDeOrigemDaImagem.camera,
+                  EnumeradorDeOrigemDaImagem.cameraFrontal,
+                ),
+              ),
+              ListTile(
+                key: const Key('tirar-foto-pela-camera-traseira'),
+                leading: const Icon(Icons.camera_rear_outlined),
+                title: const Text('Câmera traseira'),
+                onTap: () => Navigator.of(contextoDaFolha).pop(
+                  EnumeradorDeOrigemDaImagem.cameraTraseira,
                 ),
               ),
               ListTile(

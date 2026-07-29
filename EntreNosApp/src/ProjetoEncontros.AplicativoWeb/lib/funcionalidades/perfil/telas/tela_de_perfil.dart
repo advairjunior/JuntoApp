@@ -277,9 +277,15 @@ class _EstadoDaTelaDePerfil extends ConsumerState<TelaDePerfil> {
                 const SizedBox(height: EspacamentosDoAplicativo.medio),
                 ListTile(
                   key: const Key('tirar-foto-do-perfil'),
-                  leading: const Icon(Icons.camera_alt_outlined),
-                  title: const Text('Tirar foto'),
-                  onTap: () => contextoDaFolha.pop('camera'),
+                  leading: const Icon(Icons.camera_front_outlined),
+                  title: const Text('Câmera frontal'),
+                  onTap: () => contextoDaFolha.pop('camera-frontal'),
+                ),
+                ListTile(
+                  key: const Key('tirar-foto-traseira-do-perfil'),
+                  leading: const Icon(Icons.camera_rear_outlined),
+                  title: const Text('Câmera traseira'),
+                  onTap: () => contextoDaFolha.pop('camera-traseira'),
                 ),
                 ListTile(
                   key: const Key('escolher-foto-do-perfil'),
@@ -307,10 +313,15 @@ class _EstadoDaTelaDePerfil extends ConsumerState<TelaDePerfil> {
       },
     );
 
-    if (acao == 'camera') {
+    if (acao == 'camera-frontal') {
       await _altereFotoAsync(
         usuario,
-        EnumeradorDeOrigemDaImagem.camera,
+        EnumeradorDeOrigemDaImagem.cameraFrontal,
+      );
+    } else if (acao == 'camera-traseira') {
+      await _altereFotoAsync(
+        usuario,
+        EnumeradorDeOrigemDaImagem.cameraTraseira,
       );
     } else if (acao == 'galeria') {
       await _altereFotoAsync(
@@ -898,7 +909,7 @@ class _PassoDaInstalacao extends StatelessWidget {
       ),
       child: Row(
         children: <Widget>[
-          Icon(icone, color: CoresDoAplicativo.verdeDestaque),
+          Icon(icone, color: CoresDoAplicativo.azulInteracao),
           const SizedBox(width: EspacamentosDoAplicativo.medio),
           Expanded(child: Text(texto)),
         ],

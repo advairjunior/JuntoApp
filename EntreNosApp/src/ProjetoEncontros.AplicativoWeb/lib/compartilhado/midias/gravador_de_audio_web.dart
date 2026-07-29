@@ -23,10 +23,7 @@ class GravadorDeAudioWeb implements IGravadorDeAudio {
   Completer<void>? _conclusao;
 
   @override
-  bool get estaDisponivel => _tiposPreferenciais.any(
-        (String tipoDeConteudo) =>
-            web.MediaRecorder.isTypeSupported(tipoDeConteudo),
-      );
+  bool get estaDisponivel => true;
 
   @override
   Future<void> inicieAsync() async {
@@ -42,23 +39,15 @@ class GravadorDeAudioWeb implements IGravadorDeAudio {
         .toDart;
     String? tipoDeConteudo = _obtenhaTipoDeConteudoSuportado();
 
-    if (tipoDeConteudo == null) {
-      for (web.MediaStreamTrack faixa in fluxo.getTracks().toDart) {
-        faixa.stop();
-      }
-
-      throw UnsupportedError(
-        'Este navegador não oferece um formato de áudio compatível.',
-      );
-    }
-
-    web.MediaRecorder gravador = web.MediaRecorder(
-      fluxo,
-      web.MediaRecorderOptions(
-        mimeType: tipoDeConteudo,
-        audioBitsPerSecond: 96000,
-      ),
-    );
+    web.MediaRecorder gravador = tipoDeConteudo == null
+        ? web.MediaRecorder(fluxo)
+        : web.MediaRecorder(
+            fluxo,
+            web.MediaRecorderOptions(
+              mimeType: tipoDeConteudo,
+              audioBitsPerSecond: 96000,
+            ),
+          );
 
     _fluxoDoMicrofone = fluxo;
     _gravador = gravador;

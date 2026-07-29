@@ -5,6 +5,7 @@ class PessoaFrequente {
     required this.quantidadeDeEncontrosEmComum,
     required this.ultimoEncontroEm,
     this.urlDaFotoDePerfil,
+    this.proximoEncontroEm,
   });
 
   factory PessoaFrequente.deJson(Map<String, dynamic> json) {
@@ -16,6 +17,9 @@ class PessoaFrequente {
           json['quantidadeDeEncontrosEmComum'] as int? ?? 0,
       ultimoEncontroEm:
           DateTime.parse(json['ultimoEncontroEm'] as String).toLocal(),
+      proximoEncontroEm: json['proximoEncontroEm'] == null
+          ? null
+          : DateTime.parse(json['proximoEncontroEm'] as String).toLocal(),
     );
   }
 
@@ -24,6 +28,7 @@ class PessoaFrequente {
   final String? urlDaFotoDePerfil;
   final int quantidadeDeEncontrosEmComum;
   final DateTime ultimoEncontroEm;
+  final DateTime? proximoEncontroEm;
 
   String get iniciais {
     List<String> partes = nome
@@ -45,9 +50,9 @@ class PessoaFrequente {
 
   String get textoDaRecorrencia {
     if (quantidadeDeEncontrosEmComum == 1) {
-      return '1 encontro juntos';
+      return '1 encontro em comum';
     }
 
-    return '$quantidadeDeEncontrosEmComum encontros juntos';
+    return '$quantidadeDeEncontrosEmComum encontros em comum';
   }
 }

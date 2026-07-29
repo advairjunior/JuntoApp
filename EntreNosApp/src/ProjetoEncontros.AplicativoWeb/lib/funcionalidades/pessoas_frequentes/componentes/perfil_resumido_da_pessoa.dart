@@ -50,7 +50,7 @@ enum _AcaoDoPerfilResumido { convidar }
 Future<void> mostrePerfilResumidoDaPessoaAsync({
   required BuildContext context,
   required PessoaDoEncontro pessoa,
-  required String identificadorDoEncontroAtual,
+  String? identificadorDoEncontroAtual,
 }) async {
   _AcaoDoPerfilResumido? acao =
       await showModalBottomSheet<_AcaoDoPerfilResumido>(
@@ -67,7 +67,19 @@ Future<void> mostrePerfilResumidoDaPessoaAsync({
     return;
   }
 
-  await showModalBottomSheet<void>(
+  await mostreConviteParaOutroEncontroAsync(
+    context: context,
+    pessoa: pessoa,
+    identificadorDoEncontroAtual: identificadorDoEncontroAtual,
+  );
+}
+
+Future<void> mostreConviteParaOutroEncontroAsync({
+  required BuildContext context,
+  required PessoaDoEncontro pessoa,
+  String? identificadorDoEncontroAtual,
+}) {
+  return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     backgroundColor: CoresDoAplicativo.fundoDoCartao,
@@ -116,7 +128,7 @@ class _PerfilResumidoDaPessoa extends ConsumerWidget {
                 ),
                 radius: 58,
                 onTap: pessoa.urlDaFotoDePerfil?.trim().isNotEmpty ?? false
-                    ? () => _mostreFotoAmpliadaAsync(context, pessoa)
+                    ? () => mostreFotoDaPessoaAmpliadaAsync(context, pessoa)
                     : null,
                 child: FotoDePerfil(
                   url: pessoa.urlDaFotoDePerfil,
@@ -204,7 +216,7 @@ class _ConviteParaOutroEncontro extends ConsumerStatefulWidget {
   });
 
   final PessoaDoEncontro pessoa;
-  final String identificadorDoEncontroAtual;
+  final String? identificadorDoEncontroAtual;
 
   @override
   ConsumerState<_ConviteParaOutroEncontro> createState() =>
@@ -223,7 +235,9 @@ class _EstadoDoConviteParaOutroEncontro
     List<EncontroResumo> encontros = estado.encontros
         .where(
           (EncontroResumo encontro) =>
-              encontro.identificador != widget.identificadorDoEncontroAtual &&
+              (widget.identificadorDoEncontroAtual == null ||
+                  encontro.identificador !=
+                      widget.identificadorDoEncontroAtual) &&
               encontro.situacao.toLowerCase() != 'cancelado',
         )
         .toList();
@@ -325,8 +339,7 @@ class _EstadoDoConviteParaOutroEncontro
           const SizedBox(height: EspacamentosDoAplicativo.pequeno),
       itemBuilder: (BuildContext context, int indice) {
         EncontroResumo encontro = encontros[indice];
-        bool estaEnviando =
-            _identificadorEmEnvio == encontro.identificador;
+        bool estaEnviando = _identificadorEmEnvio == encontro.identificador;
 
         return Material(
           color: CoresDoAplicativo.fundoDoCartaoSuave,
@@ -399,7 +412,7 @@ class _EstadoDoConviteParaOutroEncontro
   }
 }
 
-Future<void> _mostreFotoAmpliadaAsync(
+Future<void> mostreFotoDaPessoaAmpliadaAsync(
   BuildContext context,
   PessoaDoEncontro pessoa,
 ) async {

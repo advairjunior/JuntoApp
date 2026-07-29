@@ -7,7 +7,10 @@ abstract final class CoresDoAplicativo {
   static const Color fundoDoCartao = Color(0xFF15171A);
   static const Color fundoElevado = Color(0xFF1B1D21);
   static const Color fundoDoCartaoSuave = Color(0xFF23262B);
-  static const Color fundoDaMensagemAtual = Color(0xFF17352F);
+  static const Color fundoDaMensagemAtual = Color(0xFF24282F);
+  static const Color fundoDaInteracao = Color(0xFF192334);
+  static const Color azulInteracao = Color(0xFF82AEF8);
+  static const Color azulInteracaoForte = Color(0xFF5F93EA);
   static const Color verdeDestaque = Color(0xFF35C5A3);
   static const Color verdePrincipal = Color(0xFF209D84);
   static const Color verdeEscuro = Color(0xFF176B5D);
@@ -19,8 +22,8 @@ abstract final class CoresDoAplicativo {
   static const Color textoPrincipal = Color(0xFFF4F1EA);
   static const Color textoSecundario = Color(0xFFBBB7AF);
   static const Color textoTerciario = Color(0xFF888D94);
-  static const Color bordaSuave = Color(0xFF34373D);
-  static const Color bordaDiscreta = Color(0xFF25282D);
+  static const Color bordaSuave = Color(0xFF363A41);
+  static const Color bordaDiscreta = Color(0xFF292C32);
   static const Color sobreposicaoEscura = Color(0x99000000);
   static const Color transparente = Color(0x00000000);
 }
