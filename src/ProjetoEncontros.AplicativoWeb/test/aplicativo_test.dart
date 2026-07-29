@@ -532,6 +532,7 @@ void main() {
       find.widgetWithText(TextFormField, 'Nome ou endereço do local'),
       'Casa da Bia',
     );
+    await testador.pump();
     OutlinedButton botaoDeBuscaDoLocal = testador.widget<OutlinedButton>(
       find.byKey(const Key('selecionar-ponto-no-mapa')),
     );
