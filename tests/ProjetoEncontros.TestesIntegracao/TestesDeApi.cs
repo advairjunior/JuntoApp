@@ -495,6 +495,118 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
     }
 
     [Fact]
+    public async Task MarcacoesNasMidias_DeveCriarSubstituirEExibirSomenteAMidiaExataNoHistorico()
+    {
+        await fabricaDaApi.ReinicieBancoAsync();
+        HttpClient clienteOrganizador = fabricaDaApi.CrieCliente();
+        HttpClient clienteConvidado = fabricaDaApi.CrieCliente();
+        await CadastreUsuarioAsync(
+            clienteOrganizador,
+            "Organizador Marcador",
+            "organizador.marcador@email.com",
+            "senha-segura");
+        await CadastreUsuarioAsync(
+            clienteConvidado,
+            "Pessoa Marcada",
+            "pessoa.marcada@email.com",
+            "senha-segura");
+        RespostaDeLogin loginOrganizador = await AutentiqueUsuarioAsync(
+            clienteOrganizador,
+            "organizador.marcador@email.com",
+            "senha-segura");
+        RespostaDeLogin loginConvidado = await AutentiqueUsuarioAsync(
+            clienteConvidado,
+            "pessoa.marcada@email.com",
+            "senha-segura");
+        clienteOrganizador.DefaultRequestHeaders.Authorization = new(
+            "Bearer",
+            loginOrganizador.TokenDeAcesso);
+        clienteConvidado.DefaultRequestHeaders.Authorization = new(
+            "Bearer",
+            loginConvidado.TokenDeAcesso);
+        RespostaDeUsuarioAtual perfilDoConvidado = await ObtenhaUsuarioAtualAsync(clienteConvidado);
+        RespostaDeEncontroCriado encontro = await CrieEncontroDiretoAsync(
+            clienteOrganizador,
+            "Encontro com marcações",
+            null,
+            "Casa",
+            new(2027, 9, 20, 19, 0, 0, TimeSpan.FromHours(-3)));
+        await ConvideParaEncontroDiretoAsync(
+            clienteOrganizador,
+            encontro.Identificador,
+            "pessoa.marcada@email.com");
+        await ConfirmePresencaDiretaAsync(clienteConvidado, encontro.Identificador);
+
+        using MultipartFormDataContent corpo = new();
+        ByteArrayContent primeiraFoto = new(ConteudoPngValido);
+        primeiraFoto.Headers.ContentType = new("image/png");
+        ByteArrayContent segundaFoto = new(ConteudoPngValido);
+        segundaFoto.Headers.ContentType = new("image/png");
+        corpo.Add(primeiraFoto, "arquivos", "primeira.png");
+        corpo.Add(segundaFoto, "arquivos", "segunda.png");
+        corpo.Add(
+            new StringContent(perfilDoConvidado.Identificador.ToString()),
+            "marcacoes[1]");
+        HttpResponseMessage respostaDeCriacao = await clienteOrganizador.PostAsync(
+            $"/api/encontros/{encontro.Identificador}/memorias",
+            corpo);
+        await GarantaStatusAsync(respostaDeCriacao, HttpStatusCode.Created);
+        RespostaDeMemoriaDoEncontro memoria =
+            await LeiaJsonAsync<RespostaDeMemoriaDoEncontro>(respostaDeCriacao);
+        RespostaDeMidiaDaMemoria primeiraMidia = memoria.Midias.First();
+        RespostaDeMidiaDaMemoria segundaMidia = memoria.Midias.Last();
+        Assert.Empty(primeiraMidia.PessoasMarcadas);
+        Assert.Equal(
+            perfilDoConvidado.Identificador,
+            Assert.Single(segundaMidia.PessoasMarcadas).IdentificadorDoUsuario);
+        Assert.True(memoria.PodeEditarMarcacoes);
+
+        HttpResponseMessage respostaSemPermissao = await clienteConvidado.PutAsJsonAsync(
+            $"/api/encontros/{encontro.Identificador}/memorias/{memoria.Identificador}/midias/"
+                + $"{primeiraMidia.Identificador}/marcacoes",
+            new
+            {
+                IdentificadoresDosUsuarios = new[] { perfilDoConvidado.Identificador }
+            });
+        await GarantaStatusAsync(respostaSemPermissao, HttpStatusCode.Forbidden);
+
+        HttpResponseMessage respostaDaSubstituicao = await clienteOrganizador.PutAsJsonAsync(
+            $"/api/encontros/{encontro.Identificador}/memorias/{memoria.Identificador}/midias/"
+                + $"{segundaMidia.Identificador}/marcacoes",
+            new
+            {
+                IdentificadoresDosUsuarios = Array.Empty<Guid>()
+            });
+        await GarantaStatusAsync(respostaDaSubstituicao, HttpStatusCode.OK);
+        List<RespostaDePessoaMarcadaNaMidia> pessoasAposRemocao =
+            await LeiaJsonAsync<List<RespostaDePessoaMarcadaNaMidia>>(respostaDaSubstituicao);
+        Assert.Empty(pessoasAposRemocao);
+
+        HttpResponseMessage respostaDaNovaMarcacao = await clienteOrganizador.PutAsJsonAsync(
+            $"/api/encontros/{encontro.Identificador}/memorias/{memoria.Identificador}/midias/"
+                + $"{primeiraMidia.Identificador}/marcacoes",
+            new
+            {
+                IdentificadoresDosUsuarios = new[] { perfilDoConvidado.Identificador }
+            });
+        await GarantaStatusAsync(respostaDaNovaMarcacao, HttpStatusCode.OK);
+        await MarqueEncontroDiretoComoRealizadoAsync(clienteOrganizador, encontro.Identificador);
+
+        HttpResponseMessage respostaDoHistorico = await clienteOrganizador.GetAsync(
+            $"/api/pessoas-frequentes/{perfilDoConvidado.Identificador}/historico");
+        await GarantaStatusAsync(respostaDoHistorico, HttpStatusCode.OK);
+        using JsonDocument documento = JsonDocument.Parse(
+            await respostaDoHistorico.Content.ReadAsStringAsync());
+        JsonElement memoriaDoHistorico = Assert.Single(
+            documento.RootElement.GetProperty("memorias").EnumerateArray());
+        JsonElement midiaDoHistorico = Assert.Single(
+            memoriaDoHistorico.GetProperty("midias").EnumerateArray());
+        Assert.Equal(
+            primeiraMidia.Identificador,
+            midiaDoHistorico.GetProperty("identificadorDaMidia").GetGuid());
+    }
+
+    [Fact]
     public async Task FluxoCadastroLoginCriarGrupo_DeveFuncionar()
     {
         await fabricaDaApi.ReinicieBancoAsync();
@@ -2863,13 +2975,20 @@ public sealed class TestesDeApi(FabricaDaApi fabricaDaApi) : IClassFixture<Fabri
         string? Legenda,
         DateTimeOffset CriadoEm,
         bool UsuarioAtual,
+        bool PodeEditarMarcacoes,
         IReadOnlyCollection<RespostaDeMidiaDaMemoria> Midias);
 
     private sealed record RespostaDeMidiaDaMemoria(
         Guid Identificador,
         string Url,
         string TipoDeConteudo,
-        long TamanhoEmBytes);
+        long TamanhoEmBytes,
+        IReadOnlyCollection<RespostaDePessoaMarcadaNaMidia> PessoasMarcadas);
+
+    private sealed record RespostaDePessoaMarcadaNaMidia(
+        Guid IdentificadorDoUsuario,
+        string Nome,
+        string? UrlDaFotoDePerfil);
 
     private sealed record RespostaDeItemDoEncontro(
         Guid Identificador,

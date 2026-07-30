@@ -12,7 +12,16 @@ abstract interface class IRepositorioDeMemoriasDoEncontro {
   Future<MemoriaDoEncontro> publiqueMidiasAsync({
     required String identificadorDoEncontro,
     required List<MidiaSelecionada> midias,
+    Map<int, List<String>> marcacoesPorIndiceDaMidia =
+        const <int, List<String>>{},
     String? legenda,
+  });
+
+  Future<void> atualizeMarcacoesAsync({
+    required String identificadorDoEncontro,
+    required String identificadorDaMemoria,
+    required String identificadorDaMidia,
+    required List<String> identificadoresDosUsuarios,
   });
 
   Future<void> removaAsync({
@@ -76,6 +85,8 @@ class RepositorioDeMemoriasDoEncontro
   Future<MemoriaDoEncontro> publiqueMidiasAsync({
     required String identificadorDoEncontro,
     required List<MidiaSelecionada> midias,
+    Map<int, List<String>> marcacoesPorIndiceDaMidia =
+        const <int, List<String>>{},
     String? legenda,
   }) async {
     String identificadorDaOperacao = crieIdentificadorDaOperacao();
@@ -93,6 +104,10 @@ class RepositorioDeMemoriasDoEncontro
             .toList(),
         if (legenda != null && legenda.trim().isNotEmpty)
           'legenda': legenda.trim(),
+        for (MapEntry<int, List<String>> item
+            in marcacoesPorIndiceDaMidia.entries)
+          if (item.value.isNotEmpty)
+            'marcacoes[${item.key}]': item.value.join(','),
       });
     }
 
@@ -117,6 +132,29 @@ class RepositorioDeMemoriasDoEncontro
       throw _convertaExcecao(
         excecao,
         'Não foi possível compartilhar estas mídias.',
+      );
+    }
+  }
+
+  @override
+  Future<void> atualizeMarcacoesAsync({
+    required String identificadorDoEncontro,
+    required String identificadorDaMemoria,
+    required String identificadorDaMidia,
+    required List<String> identificadoresDosUsuarios,
+  }) async {
+    try {
+      await _clienteHttp.put<dynamic>(
+        '/api/encontros/$identificadorDoEncontro/memorias/'
+        '$identificadorDaMemoria/midias/$identificadorDaMidia/marcacoes',
+        data: <String, dynamic>{
+          'identificadoresDosUsuarios': identificadoresDosUsuarios,
+        },
+      );
+    } on DioException catch (excecao) {
+      throw _convertaExcecao(
+        excecao,
+        'Não foi possível atualizar as pessoas marcadas.',
       );
     }
   }

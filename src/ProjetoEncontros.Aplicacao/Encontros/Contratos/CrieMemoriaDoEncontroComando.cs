@@ -11,4 +11,5 @@ public sealed record ArquivoDaMemoriaComando(
     string NomeDoArquivo,
     string TipoDeConteudo,
     long TamanhoEmBytes,
-    Stream Conteudo);
+    Stream Conteudo,
+    IReadOnlyCollection<Guid>? IdentificadoresDosUsuariosMarcados = null);

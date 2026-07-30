@@ -196,6 +196,7 @@ class ControladorDosMomentosDoEncontro
   Future<bool> publiqueMidiasAsync(
     List<MidiaSelecionada> midias,
     String legenda,
+    Map<int, List<String>> marcacoesPorIndiceDaMidia,
   ) async {
     EncontroDetalhado? encontroAtual = state.encontro;
     String legendaNormalizada = legenda.trim();
@@ -220,6 +221,7 @@ class ControladorDosMomentosDoEncontro
         identificadorDoEncontro: _identificadorDoEncontro,
         midias: midias,
         legenda: legendaNormalizada,
+        marcacoesPorIndiceDaMidia: marcacoesPorIndiceDaMidia,
       );
       PublicacaoDoEncontro publicacao = memoria.convertaParaPublicacao();
       List<PublicacaoDoEncontro> publicacoes = <PublicacaoDoEncontro>[

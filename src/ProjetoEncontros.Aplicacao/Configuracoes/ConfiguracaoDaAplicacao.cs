@@ -49,6 +49,7 @@ public static class ConfiguracaoDaAplicacao
         servicos.AddScoped<AlterePapelDoParticipanteDoEncontro>();
         servicos.AddScoped<CriePublicacaoDoEncontro>();
         servicos.AddScoped<CrieMemoriaDoEncontro>();
+        servicos.AddScoped<SubstituaMarcacoesDeParticipantesNaMidia>();
         servicos.AddScoped<ListeConvitesDoEncontroDoUsuario>();
         servicos.AddScoped<ListeEncontrosDoUsuario>();
         servicos.AddScoped<ListeEncontrosRealizadosDoUsuario>();

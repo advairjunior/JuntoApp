@@ -20,10 +20,12 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/cores_do_apl
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/raios_do_aplicativo.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/componentes/folha_de_resposta_de_presenca.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/componentes/folha_de_origem_da_imagem.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/servicos/dialogo_da_camera.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/encontro_detalhado.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/participante_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/servicos/seletor_de_imagem.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/dados/repositorio_de_memorias_do_encontro.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/componentes/seletor_de_pessoas_na_midia.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/inicio/estado/controlador_da_pagina_inicial.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/pessoas_frequentes/componentes/perfil_resumido_da_pessoa.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/estado/controlador_dos_momentos_do_encontro.dart';
@@ -215,6 +217,7 @@ class _EstadoDaTelaDeMomentosDoEncontro
                         duracaoDoAudio: _duracaoDoAudio,
                         audioPendente: _audioPendente,
                         aoSelecionarImagem: _selecioneMidiasAsync,
+                        aoAbrirCamera: _abraCameraAsync,
                         aoIniciarAudio: _inicieGravacaoDeAudioAsync,
                         aoCancelarAudio: _canceleAudioAsync,
                         aoEnviarAudio: _finalizeEEnvieGravacaoDeAudioAsync,
@@ -527,11 +530,15 @@ class _EstadoDaTelaDeMomentosDoEncontro
     try {
       publicou = await ref
           .read(
-        provedorDoControladorDosMomentosDoEncontro(
-          widget.identificadorDoEncontro,
-        ).notifier,
-      )
-          .publiqueMidiasAsync(<MidiaSelecionada>[midia], '');
+            provedorDoControladorDosMomentosDoEncontro(
+              widget.identificadorDoEncontro,
+            ).notifier,
+          )
+          .publiqueMidiasAsync(
+            <MidiaSelecionada>[midia],
+            '',
+            const <int, List<String>>{},
+          );
     } finally {
       if (mounted) {
         setState(() {
@@ -574,19 +581,41 @@ class _EstadoDaTelaDeMomentosDoEncontro
     }
   }
 
-  Future<void> _selecioneMidiasAsync() async {
-    EnumeradorDeOrigemDaImagem? origem = await escolhaOrigemDaImagemAsync(
-      context,
-      titulo: 'Fotos e vídeos do encontro',
-    );
-
-    if (origem == null || !mounted) {
+  Future<void> _abriDialogoDePublicacaoAsync(
+    List<MidiaSelecionada> midias,
+  ) async {
+    if (!mounted) {
       return;
     }
 
+    await _abriDialogoDePublicacaoAsync(midias);
+  }
+
+  Future<void> _abraCameraAsync() async {
+    ImagemSelecionada? imagem = await abraDialogoDaCameraAsync();
+
+    if (!mounted || imagem == null) {
+      return;
+    }
+
+    if (imagem.conteudo.lengthInBytes > 10 * 1024 * 1024) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A foto não pode ultrapassar 10 MB.'),
+        ),
+      );
+      return;
+    }
+
+    await _abriDialogoDePublicacaoAsync(<MidiaSelecionada>[
+      MidiaSelecionada.deImagem(imagem),
+    ]);
+  }
+
+  Future<void> _selecioneMidiasAsync() async {
     List<MidiaSelecionada> midias = await ref
         .read(provedorDoSeletorDeImagem)
-        .selecioneMidiasPorOrigemAsync(origem);
+        .selecioneMidiasPorOrigemAsync(EnumeradorDeOrigemDaImagem.galeria);
 
     if (!mounted || midias.isEmpty) {
       return;
@@ -614,21 +643,35 @@ class _EstadoDaTelaDeMomentosDoEncontro
     }
 
     String legendaInicial = _controladorDoTexto.text;
+    EstadoDosMomentosDoEncontro estado = ref.read(
+      provedorDoControladorDosMomentosDoEncontro(
+        widget.identificadorDoEncontro,
+      ),
+    );
     bool? publicou = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         return DialogoDeNovaPublicacao(
           midias: midias,
+          participantes: estado.encontro?.participantes ??
+              const <ParticipanteDoEncontro>[],
           legendaInicial: legendaInicial,
-          aoPublicar: (String legenda) {
+          aoPublicar: (
+            String legenda,
+            Map<int, List<String>> marcacoesPorIndiceDaMidia,
+          ) {
             return ref
                 .read(
                   provedorDoControladorDosMomentosDoEncontro(
                     widget.identificadorDoEncontro,
                   ).notifier,
                 )
-                .publiqueMidiasAsync(midias, legenda);
+                .publiqueMidiasAsync(
+                  midias,
+                  legenda,
+                  marcacoesPorIndiceDaMidia,
+                );
           },
         );
       },
@@ -1696,6 +1739,7 @@ class _CompositorDeMomento extends StatefulWidget {
     required this.duracaoDoAudio,
     required this.audioPendente,
     required this.aoSelecionarImagem,
+    required this.aoAbrirCamera,
     required this.aoIniciarAudio,
     required this.aoCancelarAudio,
     required this.aoEnviarAudio,
@@ -1715,6 +1759,7 @@ class _CompositorDeMomento extends StatefulWidget {
   final Duration duracaoDoAudio;
   final AudioGravado? audioPendente;
   final VoidCallback aoSelecionarImagem;
+  final VoidCallback aoAbrirCamera;
   final Future<void> Function() aoIniciarAudio;
   final Future<void> Function() aoCancelarAudio;
   final Future<void> Function() aoEnviarAudio;
@@ -1752,6 +1797,7 @@ class _EstadoDoCompositorDeMomento extends State<_CompositorDeMomento> {
   Duration get duracaoDoAudio => widget.duracaoDoAudio;
   AudioGravado? get audioPendente => widget.audioPendente;
   VoidCallback get aoSelecionarImagem => widget.aoSelecionarImagem;
+  VoidCallback get aoAbrirCamera => widget.aoAbrirCamera;
   Future<void> Function() get aoIniciarAudio => widget.aoIniciarAudio;
   Future<void> Function() get aoCancelarAudio => widget.aoCancelarAudio;
   Future<void> Function() get aoEnviarAudio => widget.aoEnviarAudio;
@@ -2007,8 +2053,14 @@ class _EstadoDoCompositorDeMomento extends State<_CompositorDeMomento> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: <Widget>[
                       IconButton(
+                        key: const Key('abrir-camera'),
+                        tooltip: 'Tirar foto',
+                        onPressed: estaPublicando ? null : aoAbrirCamera,
+                        icon: const Icon(Icons.camera_alt_outlined),
+                      ),
+                      IconButton(
                         key: const Key('selecionar-foto'),
-                        tooltip: 'Adicionar foto',
+                        tooltip: 'Adicionar da galeria',
                         onPressed: estaPublicando ? null : aoSelecionarImagem,
                         icon: const Icon(Icons.add_photo_alternate_outlined),
                       ),
@@ -2317,12 +2369,17 @@ class DialogoDeNovaPublicacao extends StatefulWidget {
     required this.midias,
     required this.legendaInicial,
     required this.aoPublicar,
+    this.participantes = const <ParticipanteDoEncontro>[],
     super.key,
   });
 
   final List<MidiaSelecionada> midias;
   final String legendaInicial;
-  final Future<bool> Function(String legenda) aoPublicar;
+  final List<ParticipanteDoEncontro> participantes;
+  final Future<bool> Function(
+    String legenda,
+    Map<int, List<String>> marcacoesPorIndiceDaMidia,
+  ) aoPublicar;
 
   @override
   State<DialogoDeNovaPublicacao> createState() =>
@@ -2334,6 +2391,8 @@ class _EstadoDoDialogoDeNovaPublicacao extends State<DialogoDeNovaPublicacao> {
   final PageController _controladorDasMidias = PageController();
   int _indiceDaMidia = 0;
   bool _estaPublicando = false;
+  final Map<int, List<String>> _marcacoesPorIndiceDaMidia =
+      <int, List<String>>{};
 
   @override
   void initState() {
@@ -2373,6 +2432,14 @@ class _EstadoDoDialogoDeNovaPublicacao extends State<DialogoDeNovaPublicacao> {
                 },
               ),
             ),
+            if (widget.participantes.isNotEmpty)
+              _ResumoDasMarcacoesDaPublicacao(
+                quantidadeDeMidias: widget.midias.length,
+                indiceDaMidiaAtual: _indiceDaMidia,
+                marcacoesPorIndiceDaMidia: _marcacoesPorIndiceDaMidia,
+                estaHabilitado: !_estaPublicando,
+                aoEditar: _editeMarcacoesDaMidiaAtualAsync,
+              ),
             Padding(
               padding: const EdgeInsets.all(EspacamentosDoAplicativo.padrao),
               child: TextField(
@@ -2413,7 +2480,15 @@ class _EstadoDoDialogoDeNovaPublicacao extends State<DialogoDeNovaPublicacao> {
     setState(() {
       _estaPublicando = true;
     });
-    bool publicou = await widget.aoPublicar(_controladorDaLegenda.text);
+    bool publicou = await widget.aoPublicar(
+      _controladorDaLegenda.text,
+      Map<int, List<String>>.fromEntries(
+        _marcacoesPorIndiceDaMidia.entries.map(
+          (MapEntry<int, List<String>> item) => MapEntry<int, List<String>>(
+              item.key, List<String>.from(item.value)),
+        ),
+      ),
+    );
 
     if (!mounted) {
       return;
@@ -2429,6 +2504,111 @@ class _EstadoDoDialogoDeNovaPublicacao extends State<DialogoDeNovaPublicacao> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Não foi possível publicar as mídias.')),
+    );
+  }
+
+  Future<void> _editeMarcacoesDaMidiaAtualAsync() async {
+    List<String>? selecionados = await mostreSeletorDePessoasNaMidiaAsync(
+      context,
+      participantes: widget.participantes,
+      identificadoresSelecionados: Set<String>.from(
+        _marcacoesPorIndiceDaMidia[_indiceDaMidia] ?? <String>[],
+      ),
+    );
+
+    if (selecionados == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _marcacoesPorIndiceDaMidia[_indiceDaMidia] = selecionados;
+    });
+  }
+}
+
+class _ResumoDasMarcacoesDaPublicacao extends StatelessWidget {
+  const _ResumoDasMarcacoesDaPublicacao({
+    required this.quantidadeDeMidias,
+    required this.indiceDaMidiaAtual,
+    required this.marcacoesPorIndiceDaMidia,
+    required this.estaHabilitado,
+    required this.aoEditar,
+  });
+
+  final int quantidadeDeMidias;
+  final int indiceDaMidiaAtual;
+  final Map<int, List<String>> marcacoesPorIndiceDaMidia;
+  final bool estaHabilitado;
+  final VoidCallback aoEditar;
+
+  @override
+  Widget build(BuildContext context) {
+    int quantidadeAtual =
+        marcacoesPorIndiceDaMidia[indiceDaMidiaAtual]?.length ?? 0;
+    List<MapEntry<int, List<String>>> midiasComMarcacoes =
+        marcacoesPorIndiceDaMidia.entries
+            .where((MapEntry<int, List<String>> item) => item.value.isNotEmpty)
+            .toList()
+          ..sort(
+            (MapEntry<int, List<String>> primeira,
+                    MapEntry<int, List<String>> segunda) =>
+                primeira.key.compareTo(segunda.key),
+          );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        EspacamentosDoAplicativo.padrao,
+        EspacamentosDoAplicativo.pequeno,
+        EspacamentosDoAplicativo.padrao,
+        0,
+      ),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: midiasComMarcacoes.isEmpty
+                    ? <Widget>[
+                        const Text(
+                          'Ninguém marcado',
+                          style: TextStyle(
+                            color: CoresDoAplicativo.textoSecundario,
+                          ),
+                        ),
+                      ]
+                    : midiasComMarcacoes
+                        .map(
+                          (MapEntry<int, List<String>> item) => Padding(
+                            padding: const EdgeInsets.only(
+                              right: EspacamentosDoAplicativo.minimo,
+                            ),
+                            child: Chip(
+                              label: Text(
+                                quantidadeDeMidias == 1
+                                    ? '${item.value.length} marcada(s)'
+                                    : 'Mídia ${item.key + 1}: '
+                                        '${item.value.length}',
+                              ),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                        )
+                        .toList(),
+              ),
+            ),
+          ),
+          const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+          TextButton.icon(
+            key: const Key('editar-marcacoes-da-midia-atual'),
+            onPressed: estaHabilitado ? aoEditar : null,
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            label: Text(
+              quantidadeAtual == 0 ? 'Marcar' : 'Editar ($quantidadeAtual)',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -9,4 +9,5 @@ public sealed record MemoriaDoEncontroResposta(
     string? Legenda,
     DateTimeOffset CriadoEm,
     bool UsuarioAtual,
+    bool PodeEditarMarcacoes,
     IReadOnlyCollection<MidiaDaMemoriaResposta> Midias);

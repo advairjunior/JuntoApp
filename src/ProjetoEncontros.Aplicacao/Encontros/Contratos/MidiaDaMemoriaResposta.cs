@@ -4,4 +4,5 @@ public sealed record MidiaDaMemoriaResposta(
     Guid Identificador,
     string Url,
     string TipoDeConteudo,
-    long TamanhoEmBytes);
+    long TamanhoEmBytes,
+    IReadOnlyCollection<PessoaMarcadaNaMidiaResposta> PessoasMarcadas);
