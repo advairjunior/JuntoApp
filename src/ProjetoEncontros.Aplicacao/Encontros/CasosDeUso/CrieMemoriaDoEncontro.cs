@@ -53,6 +53,9 @@ public sealed class CrieMemoriaDoEncontro(
             comando.IdentificadorDoUsuario,
             cancellationToken);
         Usuario autor = await ObtenhaAutorAsync(participante.IdentificadorDoUsuario, cancellationToken);
+        IReadOnlyDictionary<Guid, Usuario> usuariosMarcados = await ValideEObtenhaUsuariosMarcadosAsync(
+            comando,
+            cancellationToken);
         Guid identificadorDaOperacao = comando.IdentificadorDaOperacao == Guid.Empty
             ? Guid.NewGuid()
             : comando.IdentificadorDaOperacao;
@@ -79,18 +82,27 @@ public sealed class CrieMemoriaDoEncontro(
                 await repositorioDeMemoriasDoEncontro.ListeMidiasDasMemoriasAsync(
                     [memoriaExistente.Identificador],
                     cancellationToken);
+            IReadOnlyCollection<MarcacaoDeParticipanteNaMidia> marcacoesExistentes =
+                await repositorioDeMemoriasDoEncontro.ListeMarcacoesDasMidiasAsync(
+                    [.. midiasExistentes.Select(midia => midia.Identificador)],
+                    cancellationToken);
 
-            if (!ArquivosCorrespondem(comando.Arquivos, midiasExistentes))
+            if (!ArquivosEMarcacoesCorrespondem(
+                comando.Arquivos,
+                midiasExistentes,
+                marcacoesExistentes))
             {
                 throw new ExcecaoDeAplicacaoException(
-                    "O identificador da operação já foi utilizado com arquivos diferentes.");
+                    "O identificador da operação já foi utilizado com arquivos ou marcações diferentes.");
             }
 
             return CrieResposta(
                 memoriaExistente,
                 autor,
-                comando.IdentificadorDoUsuario,
-                midiasExistentes);
+                participante,
+                midiasExistentes,
+                marcacoesExistentes,
+                usuariosMarcados);
         }
 
         MemoriaDoEncontro memoria = MemoriaDoEncontro.Crie(
@@ -102,6 +114,7 @@ public sealed class CrieMemoriaDoEncontro(
 
         List<string> referenciasDosArquivos = [];
         List<MidiaDaMemoria> midias = [];
+        List<MarcacaoDeParticipanteNaMidia> marcacoes = [];
 
         try
         {
@@ -133,6 +146,18 @@ public sealed class CrieMemoriaDoEncontro(
 
                 referenciasDosArquivos.Add(url);
                 midias.Add(midia);
+
+                foreach (Guid identificadorDoUsuarioMarcado in
+                    arquivo.IdentificadoresDosUsuariosMarcados ?? [])
+                {
+                    marcacoes.Add(MarcacaoDeParticipanteNaMidia.Crie(
+                        Guid.NewGuid(),
+                        midia.Identificador,
+                        identificadorDoUsuarioMarcado,
+                        comando.IdentificadorDoUsuario,
+                        relogio.Agora));
+                }
+
                 indiceDoArquivo++;
             }
 
@@ -155,6 +180,13 @@ public sealed class CrieMemoriaDoEncontro(
                 await repositorioDeMemoriasDoEncontro.AdicioneMidiaAsync(midia, cancellationToken);
             }
 
+            if (marcacoes.Count > 0)
+            {
+                await repositorioDeMemoriasDoEncontro.AdicioneMarcacoesAsync(
+                    marcacoes,
+                    cancellationToken);
+            }
+
             await repositorioDeEncontros.AdicionePublicacaoAsync(publicacao, cancellationToken);
             await unidadeDeTrabalho.SalveAlteracoesAsync(cancellationToken);
         }
@@ -168,7 +200,13 @@ public sealed class CrieMemoriaDoEncontro(
             throw;
         }
 
-        return CrieResposta(memoria, autor, comando.IdentificadorDoUsuario, midias);
+        return CrieResposta(
+            memoria,
+            autor,
+            participante,
+            midias,
+            marcacoes,
+            usuariosMarcados);
     }
 
     private async Task TenteRemoverAsync(string referenciaDoArquivo)
@@ -260,6 +298,22 @@ public sealed class CrieMemoriaDoEncontro(
 
         foreach (ArquivoDaMemoriaComando arquivo in comando.Arquivos)
         {
+            IReadOnlyCollection<Guid> identificadoresDosUsuariosMarcados =
+                arquivo.IdentificadoresDosUsuariosMarcados ?? [];
+
+            if (identificadoresDosUsuariosMarcados.Any(identificador => identificador == Guid.Empty))
+            {
+                throw new ExcecaoDeAplicacaoException(
+                    "O identificador do usuário marcado não pode ser vazio.");
+            }
+
+            if (identificadoresDosUsuariosMarcados.Distinct().Count() !=
+                identificadoresDosUsuariosMarcados.Count)
+            {
+                throw new ExcecaoDeAplicacaoException(
+                    "Uma pessoa não pode ser marcada mais de uma vez na mesma mídia.");
+            }
+
             if (!TiposDeConteudoPermitidos.Contains(arquivo.TipoDeConteudo))
             {
                 throw new ExcecaoDeAplicacaoException(
@@ -283,6 +337,53 @@ public sealed class CrieMemoriaDoEncontro(
                 throw new ExcecaoDeAplicacaoException("O arquivo da memória é obrigatório.");
             }
         }
+    }
+
+    private async Task<IReadOnlyDictionary<Guid, Usuario>> ValideEObtenhaUsuariosMarcadosAsync(
+        CrieMemoriaDoEncontroComando comando,
+        CancellationToken cancellationToken)
+    {
+        List<Guid> identificadoresDosUsuariosMarcados = comando.Arquivos
+            .SelectMany(arquivo => arquivo.IdentificadoresDosUsuariosMarcados ?? [])
+            .Distinct()
+            .ToList();
+
+        if (identificadoresDosUsuariosMarcados.Count == 0)
+        {
+            return new Dictionary<Guid, Usuario>();
+        }
+
+        IReadOnlyCollection<ParticipanteDoEncontro> participantes =
+            await repositorioDeEncontros.ListeParticipantesDosEncontrosAsync(
+                [comando.IdentificadorDoEncontro],
+                cancellationToken);
+        HashSet<Guid> identificadoresDosParticipantesAtivos = participantes
+            .Where(participante => participante.PodeAcessarEncontro)
+            .Select(participante => participante.IdentificadorDoUsuario)
+            .ToHashSet();
+
+        if (identificadoresDosUsuariosMarcados.Any(identificador =>
+            !identificadoresDosParticipantesAtivos.Contains(identificador)))
+        {
+            throw new ExcecaoDeAplicacaoException(
+                "Somente participantes ativos do encontro podem ser marcados.");
+        }
+
+        IReadOnlyCollection<Usuario> usuarios = await repositorioDeUsuarios.ObtenhaPorIdentificadoresAsync(
+            identificadoresDosUsuariosMarcados,
+            cancellationToken);
+        Dictionary<Guid, Usuario> usuariosAtivos = usuarios
+            .Where(usuario => usuario.EstaAtivo)
+            .ToDictionary(usuario => usuario.Identificador);
+
+        if (identificadoresDosUsuariosMarcados.Any(identificador =>
+            !usuariosAtivos.ContainsKey(identificador)))
+        {
+            throw new ExcecaoDeAplicacaoException(
+                "Somente usuários ativos podem ser marcados.");
+        }
+
+        return usuariosAtivos;
     }
 
     private static Task ValideConteudoAsync(
@@ -311,9 +412,10 @@ public sealed class CrieMemoriaDoEncontro(
             cancellationToken);
     }
 
-    private static bool ArquivosCorrespondem(
+    private static bool ArquivosEMarcacoesCorrespondem(
         IReadOnlyCollection<ArquivoDaMemoriaComando> arquivos,
-        IReadOnlyCollection<MidiaDaMemoria> midias)
+        IReadOnlyCollection<MidiaDaMemoria> midias,
+        IReadOnlyCollection<MarcacaoDeParticipanteNaMidia> marcacoes)
     {
         if (arquivos.Count != midias.Count)
         {
@@ -324,13 +426,18 @@ public sealed class CrieMemoriaDoEncontro(
             .Select(arquivo => CrieAssinatura(
                 arquivo.NomeDoArquivo,
                 arquivo.TipoDeConteudo,
-                arquivo.TamanhoEmBytes))
+                arquivo.TamanhoEmBytes,
+                arquivo.IdentificadoresDosUsuariosMarcados ?? []))
             .Order()];
         List<string> assinaturasDasMidias = [.. midias
             .Select(midia => CrieAssinatura(
                 midia.NomeOriginal ?? string.Empty,
                 midia.TipoDeConteudo,
-                midia.TamanhoEmBytes))
+                midia.TamanhoEmBytes,
+                marcacoes
+                    .Where(marcacao => marcacao.IdentificadorDaMidia == midia.Identificador)
+                    .Select(marcacao => marcacao.IdentificadorDoUsuarioMarcado)
+                    .ToList()))
             .Order()];
 
         return assinaturasDosArquivos.SequenceEqual(assinaturasDasMidias);
@@ -339,16 +446,24 @@ public sealed class CrieMemoriaDoEncontro(
     private static string CrieAssinatura(
         string nomeDoArquivo,
         string tipoDeConteudo,
-        long tamanhoEmBytes)
+        long tamanhoEmBytes,
+        IReadOnlyCollection<Guid> identificadoresDosUsuariosMarcados)
     {
-        return $"{nomeDoArquivo.Trim()}\u001F{tipoDeConteudo.Trim()}\u001F{tamanhoEmBytes}";
+        string identificadoresOrdenados = string.Join(
+            ',',
+            identificadoresDosUsuariosMarcados.Order());
+
+        return $"{nomeDoArquivo.Trim()}\u001F{tipoDeConteudo.Trim()}\u001F{tamanhoEmBytes}"
+            + $"\u001F{identificadoresOrdenados}";
     }
 
     private static MemoriaDoEncontroResposta CrieResposta(
         MemoriaDoEncontro memoria,
         Usuario autor,
-        Guid identificadorDoUsuarioAtual,
-        IReadOnlyCollection<MidiaDaMemoria> midias)
+        ParticipanteDoEncontro participanteAtual,
+        IReadOnlyCollection<MidiaDaMemoria> midias,
+        IReadOnlyCollection<MarcacaoDeParticipanteNaMidia> marcacoes,
+        IReadOnlyDictionary<Guid, Usuario> usuariosMarcados)
     {
         return new(
             memoria.Identificador,
@@ -358,11 +473,22 @@ public sealed class CrieMemoriaDoEncontro(
             autor.UrlDaFotoDePerfil,
             memoria.Legenda,
             memoria.CriadoEm,
-            memoria.IdentificadorDoUsuarioQuePublicou == identificadorDoUsuarioAtual,
+            memoria.IdentificadorDoUsuarioQuePublicou == participanteAtual.IdentificadorDoUsuario,
+            memoria.IdentificadorDoUsuarioQuePublicou == participanteAtual.IdentificadorDoUsuario ||
+                participanteAtual.EhOrganizador,
             [.. midias.Select(midia => new MidiaDaMemoriaResposta(
                 midia.Identificador,
                 midia.Url,
                 midia.TipoDeConteudo,
-                midia.TamanhoEmBytes))]);
+                midia.TamanhoEmBytes,
+                [.. marcacoes
+                    .Where(marcacao => marcacao.IdentificadorDaMidia == midia.Identificador)
+                    .Select(marcacao => usuariosMarcados[marcacao.IdentificadorDoUsuarioMarcado])
+                    .OrderBy(usuario => usuario.Nome)
+                    .ThenBy(usuario => usuario.Identificador)
+                    .Select(usuario => new PessoaMarcadaNaMidiaResposta(
+                        usuario.Identificador,
+                        usuario.Nome,
+                        usuario.UrlDaFotoDePerfil))]))]);
     }
 }

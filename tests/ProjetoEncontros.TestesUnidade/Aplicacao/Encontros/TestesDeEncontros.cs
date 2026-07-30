@@ -1286,6 +1286,82 @@ public sealed class TestesDeEncontros
     }
 
     [Fact]
+    public async Task CrieAsync_DeveMarcarParticipanteNaMidiaCorrespondente()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Resenha", InicioFuturo, IdentificadorDoUsuario);
+        ambiente.RepositorioDeEncontros.Participantes.Add(ParticipanteDoEncontro.CrieConvidado(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            Agora));
+        CrieMemoriaDoEncontro crieMemoriaDoEncontro = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeMemoriasDoEncontro,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.ArmazenamentoDeMidiasDeMemoria,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+        CrieMemoriaDoEncontroComando comando = new(
+            IdentificadorDoUsuario,
+            encontro.Identificador,
+            "Foto marcada",
+            [new(
+                "foto.jpg",
+                "image/jpeg",
+                6,
+                new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xD9]),
+                [IdentificadorDeOutroUsuario])]);
+
+        MemoriaDoEncontroResposta resposta = await crieMemoriaDoEncontro.CrieAsync(
+            comando,
+            CancellationToken.None);
+
+        MidiaDaMemoriaResposta midia = Assert.Single(resposta.Midias);
+        PessoaMarcadaNaMidiaResposta pessoaMarcada = Assert.Single(midia.PessoasMarcadas);
+        MarcacaoDeParticipanteNaMidia marcacao = Assert.Single(
+            ambiente.RepositorioDeMemoriasDoEncontro.Marcacoes);
+        Assert.Equal(IdentificadorDeOutroUsuario, pessoaMarcada.IdentificadorDoUsuario);
+        Assert.Equal(midia.Identificador, marcacao.IdentificadorDaMidia);
+        Assert.Equal(IdentificadorDeOutroUsuario, marcacao.IdentificadorDoUsuarioMarcado);
+        Assert.Equal(IdentificadorDoUsuario, marcacao.IdentificadorDoUsuarioQueMarcou);
+        Assert.Equal(Agora, marcacao.CriadoEm);
+        Assert.True(resposta.PodeEditarMarcacoes);
+    }
+
+    [Fact]
+    public async Task CrieAsync_DeveRejeitarMarcacaoDePessoaQueNaoParticipaDoEncontro()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Resenha", InicioFuturo, IdentificadorDoUsuario);
+        CrieMemoriaDoEncontro crieMemoriaDoEncontro = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeMemoriasDoEncontro,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.ArmazenamentoDeMidiasDeMemoria,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+        CrieMemoriaDoEncontroComando comando = new(
+            IdentificadorDoUsuario,
+            encontro.Identificador,
+            null,
+            [new(
+                "foto.jpg",
+                "image/jpeg",
+                6,
+                new MemoryStream([0xFF, 0xD8, 0xFF, 0xE0, 0xFF, 0xD9]),
+                [IdentificadorDeOutroUsuario])]);
+
+        ExcecaoDeAplicacaoException excecao =
+            await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
+                crieMemoriaDoEncontro.CrieAsync(comando, CancellationToken.None));
+
+        Assert.Contains("participantes ativos", excecao.Message);
+        Assert.Empty(ambiente.RepositorioDeMemoriasDoEncontro.Memorias);
+        Assert.Empty(ambiente.RepositorioDeMemoriasDoEncontro.Marcacoes);
+    }
+
+    [Fact]
     public async Task CrieAsync_DeveRemoverMidiaQuandoPersistenciaFalhar()
     {
         AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
@@ -1382,6 +1458,122 @@ public sealed class TestesDeEncontros
         MemoriaDoEncontroResposta memoriaResposta = Assert.Single(resposta);
         Assert.Equal(memoria.Identificador, memoriaResposta.Identificador);
         Assert.Single(memoriaResposta.Midias);
+    }
+
+    [Fact]
+    public async Task SubstituaAsync_DevePreservarMarcacaoMantidaERegistrarNovaMarcacao()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Guid identificadorDoTerceiroUsuario = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+        ambiente.RepositorioDeUsuarios.Usuarios.Add(Usuario.Crie(
+            identificadorDoTerceiroUsuario,
+            "Carla Lima",
+            Email.Crie("carla@email.com"),
+            "hash::senha",
+            Agora));
+        Encontro encontro = ambiente.CrieEncontroDireto("Resenha", InicioFuturo, IdentificadorDoUsuario);
+        ambiente.RepositorioDeEncontros.Participantes.Add(ParticipanteDoEncontro.CrieConvidado(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            Agora));
+        ambiente.RepositorioDeEncontros.Participantes.Add(ParticipanteDoEncontro.CrieConvidado(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            identificadorDoTerceiroUsuario,
+            Agora));
+        MemoriaDoEncontro memoria = MemoriaDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDoUsuario,
+            null,
+            Agora);
+        MidiaDaMemoria midia = MidiaDaMemoria.Crie(
+            Guid.NewGuid(),
+            memoria.Identificador,
+            "/foto.jpg",
+            "foto.jpg",
+            "image/jpeg",
+            6,
+            Agora);
+        MarcacaoDeParticipanteNaMidia marcacaoExistente = MarcacaoDeParticipanteNaMidia.Crie(
+            Guid.NewGuid(),
+            midia.Identificador,
+            IdentificadorDeOutroUsuario,
+            IdentificadorDoUsuario,
+            Agora.AddMinutes(-1));
+        ambiente.RepositorioDeMemoriasDoEncontro.Memorias.Add(memoria);
+        ambiente.RepositorioDeMemoriasDoEncontro.Midias.Add(midia);
+        ambiente.RepositorioDeMemoriasDoEncontro.Marcacoes.Add(marcacaoExistente);
+        SubstituaMarcacoesDeParticipantesNaMidia substituaMarcacoes = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeMemoriasDoEncontro,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+
+        IReadOnlyCollection<PessoaMarcadaNaMidiaResposta> resposta =
+            await substituaMarcacoes.SubstituaAsync(
+                new(
+                    IdentificadorDoUsuario,
+                    encontro.Identificador,
+                    memoria.Identificador,
+                    midia.Identificador,
+                    [IdentificadorDeOutroUsuario, identificadorDoTerceiroUsuario]),
+                CancellationToken.None);
+
+        Assert.Equal(2, resposta.Count);
+        Assert.Equal(2, ambiente.RepositorioDeMemoriasDoEncontro.Marcacoes.Count);
+        Assert.Contains(marcacaoExistente, ambiente.RepositorioDeMemoriasDoEncontro.Marcacoes);
+        MarcacaoDeParticipanteNaMidia novaMarcacao =
+            ambiente.RepositorioDeMemoriasDoEncontro.Marcacoes.Single(marcacao =>
+                marcacao.IdentificadorDoUsuarioMarcado == identificadorDoTerceiroUsuario);
+        Assert.Equal(IdentificadorDoUsuario, novaMarcacao.IdentificadorDoUsuarioQueMarcou);
+        Assert.Equal(Agora, novaMarcacao.CriadoEm);
+    }
+
+    [Fact]
+    public async Task SubstituaAsync_DeveBloquearConvidadoQueNaoEhAutor()
+    {
+        AmbienteDeTeste ambiente = AmbienteDeTeste.Crie();
+        Encontro encontro = ambiente.CrieEncontroDireto("Resenha", InicioFuturo, IdentificadorDoUsuario);
+        ambiente.RepositorioDeEncontros.Participantes.Add(ParticipanteDoEncontro.CrieConvidado(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDeOutroUsuario,
+            Agora));
+        MemoriaDoEncontro memoria = MemoriaDoEncontro.Crie(
+            Guid.NewGuid(),
+            encontro.Identificador,
+            IdentificadorDoUsuario,
+            null,
+            Agora);
+        MidiaDaMemoria midia = MidiaDaMemoria.Crie(
+            Guid.NewGuid(),
+            memoria.Identificador,
+            "/foto.jpg",
+            "foto.jpg",
+            "image/jpeg",
+            6,
+            Agora);
+        ambiente.RepositorioDeMemoriasDoEncontro.Memorias.Add(memoria);
+        ambiente.RepositorioDeMemoriasDoEncontro.Midias.Add(midia);
+        SubstituaMarcacoesDeParticipantesNaMidia substituaMarcacoes = new(
+            ambiente.RepositorioDeEncontros,
+            ambiente.RepositorioDeMemoriasDoEncontro,
+            ambiente.RepositorioDeUsuarios,
+            ambiente.Relogio,
+            ambiente.UnidadeDeTrabalho);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            substituaMarcacoes.SubstituaAsync(
+                new(
+                    IdentificadorDeOutroUsuario,
+                    encontro.Identificador,
+                    memoria.Identificador,
+                    midia.Identificador,
+                    []),
+                CancellationToken.None));
     }
 
     [Fact]
@@ -2289,6 +2481,8 @@ public sealed class TestesDeEncontros
 
         public List<MidiaDaMemoria> Midias { get; } = [];
 
+        public List<MarcacaoDeParticipanteNaMidia> Marcacoes { get; } = [];
+
         public Task AdicioneMemoriaAsync(MemoriaDoEncontro memoria, CancellationToken cancellationToken)
         {
             Memorias.Add(memoria);
@@ -2299,6 +2493,15 @@ public sealed class TestesDeEncontros
         public Task AdicioneMidiaAsync(MidiaDaMemoria midia, CancellationToken cancellationToken)
         {
             Midias.Add(midia);
+
+            return Task.CompletedTask;
+        }
+
+        public Task AdicioneMarcacoesAsync(
+            IReadOnlyCollection<MarcacaoDeParticipanteNaMidia> marcacoes,
+            CancellationToken cancellationToken)
+        {
+            Marcacoes.AddRange(marcacoes);
 
             return Task.CompletedTask;
         }
@@ -2332,6 +2535,34 @@ public sealed class TestesDeEncontros
                 .Where(midia => identificadoresDasMemorias.Contains(midia.IdentificadorDaMemoria))];
 
             return Task.FromResult(midias);
+        }
+
+        public Task<MidiaDaMemoria?> ObtenhaMidiaAsync(
+            Guid identificadorDaMidia,
+            CancellationToken cancellationToken)
+        {
+            MidiaDaMemoria? midia = Midias.FirstOrDefault(midiaAtual =>
+                midiaAtual.Identificador == identificadorDaMidia);
+
+            return Task.FromResult(midia);
+        }
+
+        public Task<IReadOnlyCollection<MarcacaoDeParticipanteNaMidia>> ListeMarcacoesDasMidiasAsync(
+            IReadOnlyCollection<Guid> identificadoresDasMidias,
+            CancellationToken cancellationToken)
+        {
+            IReadOnlyCollection<MarcacaoDeParticipanteNaMidia> marcacoes = [.. Marcacoes
+                .Where(marcacao => identificadoresDasMidias.Contains(marcacao.IdentificadorDaMidia))];
+
+            return Task.FromResult(marcacoes);
+        }
+
+        public void RemovaMarcacoes(IReadOnlyCollection<MarcacaoDeParticipanteNaMidia> marcacoes)
+        {
+            foreach (MarcacaoDeParticipanteNaMidia marcacao in marcacoes)
+            {
+                Marcacoes.Remove(marcacao);
+            }
         }
 
         public Task<int> ConteMemoriasDoEncontroAsync(

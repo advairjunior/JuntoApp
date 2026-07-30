@@ -122,6 +122,9 @@ void main() {
   testWidgets('deve listar, buscar e abrir uma pessoa conhecida', (
     WidgetTester testador,
   ) async {
+    DateTime vinteDiasAtras = DateTime.now().subtract(
+      const Duration(days: 20),
+    );
     RepositorioDeAutenticacaoFalso repositorio =
         RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
     RepositorioDePessoasFrequentesFalso pessoasFrequentes =
@@ -131,7 +134,7 @@ void main() {
           identificadorDoUsuario: 'usuario-ana',
           nome: 'Ana Souza',
           quantidadeDeEncontrosEmComum: 3,
-          ultimoEncontroEm: DateTime(2026, 7, 9),
+          ultimoEncontroEm: vinteDiasAtras,
         ),
         PessoaFrequente(
           identificadorDoUsuario: 'usuario-caio',
@@ -145,7 +148,7 @@ void main() {
         nome: 'Ana Souza',
         quantidadeDeEncontrosEmComum: 3,
         quantidadeDeEncontrosRealizadosJuntos: 1,
-        ultimoEncontroEm: DateTime(2026, 7, 9),
+        ultimoEncontroEm: vinteDiasAtras,
         primeiroEncontroEm: DateTime(2026, 7, 9),
         proximosEncontros: const <ProximoEncontroComPessoa>[],
         temMaisProximosEncontros: false,
@@ -1620,14 +1623,12 @@ void main() {
     await testador.pumpAndSettle();
     await testador.tap(find.byKey(const Key('selecionar-foto')));
     await testador.pumpAndSettle();
-    await testador.tap(find.byKey(const Key('tirar-foto-pela-camera')));
-    await testador.pumpAndSettle();
 
     expect(find.byKey(const Key('previa-da-midia-0')), findsOneWidget);
     expect(find.text('1/2'), findsOneWidget);
     expect(
       seletorDeImagem.ultimaOrigem,
-      EnumeradorDeOrigemDaImagem.cameraFrontal,
+      EnumeradorDeOrigemDaImagem.galeria,
     );
 
     await testador.enterText(
@@ -1672,6 +1673,30 @@ void main() {
 
     expect(repositorioDeMemorias.ultimaMemoriaRemovida, 'memoria-nova');
     expect(find.byKey(const Key('publicacao-memoria-nova')), findsNothing);
+  });
+
+  testWidgets('deve abrir a camera sem seletor intermediario no mural', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso(sessaoPodeSerRestaurada: true);
+    SeletorDeImagemFalso seletorDeImagem = SeletorDeImagemFalso();
+
+    await testador.pumpWidget(
+      _crieAplicativo(
+        repositorio,
+        seletorDeImagem: seletorDeImagem,
+      ),
+    );
+    await testador.pumpAndSettle();
+    await testador.tap(find.text('Café de domingo'));
+    await testador.pumpAndSettle();
+    await testador.tap(find.byKey(const Key('abrir-camera')));
+    await testador.pumpAndSettle();
+
+    expect(find.text('Câmera frontal'), findsNothing);
+    expect(find.text('Câmera traseira'), findsNothing);
+    expect(seletorDeImagem.ultimaOrigem, isNull);
   });
 
   testWidgets('deve gravar e enviar um audio pelo compositor no desktop', (
@@ -3023,6 +3048,8 @@ class RepositorioDeMemoriasDoEncontroFalso
   Future<MemoriaDoEncontro> publiqueMidiasAsync({
     required String identificadorDoEncontro,
     required List<MidiaSelecionada> midias,
+    Map<int, List<String>> marcacoesPorIndiceDaMidia =
+        const <int, List<String>>{},
     String? legenda,
   }) async {
     ultimaLegenda = legenda;
@@ -3040,6 +3067,14 @@ class RepositorioDeMemoriasDoEncontroFalso
       tipoDeConteudo: midias.first.tipoDeConteudo,
     );
   }
+
+  @override
+  Future<void> atualizeMarcacoesAsync({
+    required String identificadorDoEncontro,
+    required String identificadorDaMemoria,
+    required String identificadorDaMidia,
+    required List<String> identificadoresDosUsuarios,
+  }) async {}
 
   MemoriaDoEncontro _crieMemoria({
     required String identificadorDoEncontro,
