@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:math' as matematica;
 import 'dart:typed_data';
 
 import 'package:web/web.dart' as web;
+
+const int _maiorDimensaoPermitida = 1920;
 
 Future<Uint8List> corrijaEspelhamentoDaSelfieAsync(
   Uint8List conteudo,
@@ -19,13 +22,23 @@ Future<Uint8List> corrijaEspelhamentoDaSelfieAsync(
       ..src = enderecoTemporario;
     await imagem.decode().toDart;
 
+    int maiorDimensaoOriginal = matematica.max(
+      imagem.naturalWidth,
+      imagem.naturalHeight,
+    );
+    double escala = maiorDimensaoOriginal > _maiorDimensaoPermitida
+        ? _maiorDimensaoPermitida / maiorDimensaoOriginal
+        : 1;
+    int larguraProcessada = (imagem.naturalWidth * escala).round();
+    int alturaProcessada = (imagem.naturalHeight * escala).round();
+
     web.HTMLCanvasElement tela = web.HTMLCanvasElement()
-      ..width = imagem.naturalWidth
-      ..height = imagem.naturalHeight;
+      ..width = larguraProcessada
+      ..height = alturaProcessada;
     web.CanvasRenderingContext2D contexto = tela.context2D;
     contexto.translate(tela.width, 0);
     contexto.scale(-1, 1);
-    contexto.drawImage(imagem, 0, 0);
+    contexto.drawImage(imagem, 0, 0, larguraProcessada, alturaProcessada);
 
     Completer<web.Blob> resultado = Completer<web.Blob>();
     tela.toBlob(
