@@ -63,8 +63,9 @@ public sealed class AltereFotoDePerfil(
         return new(
             usuario.Identificador,
             usuario.Nome,
-            usuario.Email.Valor,
-            usuario.UrlDaFotoDePerfil);
+            ObtenhaNumeroDeCelular(usuario),
+            usuario.UrlDaFotoDePerfil,
+            usuario.Papel);
     }
 
     private async Task TenteRemoverAsync(string referenciaDoArquivo)
@@ -77,6 +78,16 @@ public sealed class AltereFotoDePerfil(
         {
             // A falha original do banco deve permanecer visível ao chamador.
         }
+    }
+
+    private static string ObtenhaNumeroDeCelular(Usuario usuario)
+    {
+        if (usuario.NumeroDeCelular is null)
+        {
+            throw new ExcecaoDeAplicacaoException("O usuario atual ainda nao possui celular cadastrado.");
+        }
+
+        return usuario.NumeroDeCelular.Valor;
     }
 
     private static void ValideArquivo(AltereFotoDePerfilComando comando)

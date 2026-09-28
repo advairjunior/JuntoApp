@@ -16,11 +16,12 @@ public sealed class TestesDeAutenticacaoDeUsuario
     public async Task AutentiqueAsync_DeveCriarSessao()
     {
         RepositorioDeUsuariosFalso repositorioDeUsuarios = new();
-        repositorioDeUsuarios.Usuario = Usuario.Crie(
+        repositorioDeUsuarios.Usuario = Usuario.CrieComCelularEPin(
             Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             "Maria Souza",
-            Email.Crie("maria@email.com"),
-            "hash::senha-segura",
+            NumeroDeCelular.Crie("62999998888"),
+            "hash::123456",
+            PapelDoUsuario.Pessoa,
             Agora);
         RepositorioDeTokensDeAtualizacaoFalso repositorioDeTokens = new();
         UnidadeDeTrabalhoFalsa unidadeDeTrabalho = new();
@@ -28,7 +29,7 @@ public sealed class TestesDeAutenticacaoDeUsuario
             repositorioDeUsuarios,
             repositorioDeTokens,
             unidadeDeTrabalho);
-        AutentiqueUsuarioComando comando = new("maria@email.com", "senha-segura");
+        AutentiqueUsuarioComando comando = new("(62) 99999-8888", "123456");
 
         SessaoCriadaResposta resposta = await autenticacaoDeUsuario.AutentiqueAsync(comando, CancellationToken.None);
 
@@ -48,7 +49,7 @@ public sealed class TestesDeAutenticacaoDeUsuario
             new RepositorioDeUsuariosFalso(),
             new RepositorioDeTokensDeAtualizacaoFalso(),
             new UnidadeDeTrabalhoFalsa());
-        AutentiqueUsuarioComando comando = new("maria@email.com", "senha-segura");
+        AutentiqueUsuarioComando comando = new("62999998888", "123456");
 
         await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
             autenticacaoDeUsuario.AutentiqueAsync(comando, CancellationToken.None));
@@ -58,17 +59,18 @@ public sealed class TestesDeAutenticacaoDeUsuario
     public async Task AutentiqueAsync_DeveRejeitarSenhaIncorreta()
     {
         RepositorioDeUsuariosFalso repositorioDeUsuarios = new();
-        repositorioDeUsuarios.Usuario = Usuario.Crie(
+        repositorioDeUsuarios.Usuario = Usuario.CrieComCelularEPin(
             Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             "Maria Souza",
-            Email.Crie("maria@email.com"),
-            "hash::senha-correta",
+            NumeroDeCelular.Crie("62999998888"),
+            "hash::123456",
+            PapelDoUsuario.Pessoa,
             Agora);
         AutenticacaoDeUsuario autenticacaoDeUsuario = CrieAutenticacaoDeUsuario(
             repositorioDeUsuarios,
             new RepositorioDeTokensDeAtualizacaoFalso(),
             new UnidadeDeTrabalhoFalsa());
-        AutentiqueUsuarioComando comando = new("maria@email.com", "senha-errada");
+        AutentiqueUsuarioComando comando = new("62999998888", "654321");
 
         await Assert.ThrowsAsync<ExcecaoDeAplicacaoException>(() =>
             autenticacaoDeUsuario.AutentiqueAsync(comando, CancellationToken.None));
@@ -78,11 +80,12 @@ public sealed class TestesDeAutenticacaoDeUsuario
     public async Task RenoveAsync_DeveCriarNovaSessaoRevogandoTokenAnterior()
     {
         RepositorioDeUsuariosFalso repositorioDeUsuarios = new();
-        repositorioDeUsuarios.Usuario = Usuario.Crie(
+        repositorioDeUsuarios.Usuario = Usuario.CrieComCelularEPin(
             Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             "Maria Souza",
-            Email.Crie("maria@email.com"),
-            "hash::senha-segura",
+            NumeroDeCelular.Crie("62999998888"),
+            "hash::123456",
+            PapelDoUsuario.Pessoa,
             Agora);
         RepositorioDeTokensDeAtualizacaoFalso repositorioDeTokens = new();
         TokenDeAtualizacao tokenAtual = TokenDeAtualizacao.Crie(
@@ -169,7 +172,7 @@ public sealed class TestesDeAutenticacaoDeUsuario
         return new(
             repositorioDeUsuarios,
             repositorioDeTokens,
-            new ServicoDeHashDeSenhaFalso(),
+            new ServicoDeHashDePinFalso(),
             new GeradorDeTokenDeAcessoFalso(),
             new GeradorDeTokenDeAtualizacaoFalso(),
             new RelogioFalso(),
@@ -204,6 +207,21 @@ public sealed class TestesDeAutenticacaoDeUsuario
     private sealed class RepositorioDeUsuariosFalso : IRepositorioDeUsuarios
     {
         public Usuario? Usuario { get; set; }
+
+        public Task<bool> ExisteComNumeroDeCelularAsync(NumeroDeCelular numeroDeCelular, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Usuario?.NumeroDeCelular == numeroDeCelular);
+        }
+
+        public Task<Usuario?> ObtenhaPorNumeroDeCelularAsync(NumeroDeCelular numeroDeCelular, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Usuario?.NumeroDeCelular == numeroDeCelular ? Usuario : null);
+        }
+
+        public Task<bool> ExisteAlgumAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Usuario is not null);
+        }
 
         public Task<bool> ExisteComEmailAsync(Email email, CancellationToken cancellationToken)
         {
@@ -271,16 +289,16 @@ public sealed class TestesDeAutenticacaoDeUsuario
         }
     }
 
-    private sealed class ServicoDeHashDeSenhaFalso : IServicoDeHashDeSenha
+    private sealed class ServicoDeHashDePinFalso : IServicoDeHashDePin
     {
-        public string GereHash(string senha)
+        public string GereHash(string pin)
         {
-            return $"hash::{senha}";
+            return $"hash::{pin}";
         }
 
-        public bool Verifique(string senha, string hashDaSenha)
+        public bool Verifique(string pin, string hashDoPin)
         {
-            return hashDaSenha == $"hash::{senha}";
+            return hashDoPin == $"hash::{pin}";
         }
     }
 

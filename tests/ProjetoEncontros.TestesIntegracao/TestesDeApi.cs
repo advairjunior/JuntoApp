@@ -3054,17 +3054,21 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
     private const string CadeiaDeConexaoDosTestes =
         "Host=localhost;Port=5432;Database=projeto_encontros_testes;Username=projeto_encontros;Password=projeto_encontros_dev";
 
-    public HttpClient CrieCliente()
+    private static int _ultimoEnderecoIp;
+
+    public HttpClient CrieCliente(string? enderecoIp = null)
     {
         WebApplicationFactoryClientOptions opcoes = new()
         {
             BaseAddress = new("https://localhost")
         };
 
-        return CreateClient(opcoes);
+        HttpClient cliente = CreateClient(opcoes);
+        AdicioneEnderecoIp(cliente, enderecoIp);
+        return cliente;
     }
 
-    public HttpClient CrieClienteSemCookiesAutomaticos()
+    public HttpClient CrieClienteSemCookiesAutomaticos(string? enderecoIp = null)
     {
         WebApplicationFactoryClientOptions opcoes = new()
         {
@@ -3072,7 +3076,9 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
             HandleCookies = false
         };
 
-        return CreateClient(opcoes);
+        HttpClient cliente = CreateClient(opcoes);
+        AdicioneEnderecoIp(cliente, enderecoIp);
+        return cliente;
     }
 
     public async Task ReinicieBancoAsync()
@@ -3117,6 +3123,7 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
             ["Jwt:Chave"] = "chave-ficticia-exclusiva-dos-testes-de-integracao",
             ["Cors:OrigensPermitidas:0"] = "http://127.0.0.1:5391",
             ["Cors:OrigensPermitidas:1"] = "http://localhost:5391",
+            ["ProxyReverso:Habilitado"] = "true",
             ["AplicativoWeb:Pasta"] = Path.Combine(
                 AppContext.BaseDirectory,
                 "Recursos",
@@ -3136,5 +3143,11 @@ public sealed class FabricaDaApi : WebApplicationFactory<Program>
                 opcoes.UseNpgsql(CadeiaDeConexaoDosTestes);
             });
         });
+    }
+
+    private static void AdicioneEnderecoIp(HttpClient cliente, string? enderecoIp)
+    {
+        string enderecoResolvido = enderecoIp ?? $"198.18.0.{Interlocked.Increment(ref _ultimoEnderecoIp) % 250 + 1}";
+        cliente.DefaultRequestHeaders.TryAddWithoutValidation("X-Forwarded-For", enderecoResolvido);
     }
 }

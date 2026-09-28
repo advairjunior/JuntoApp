@@ -19,6 +19,9 @@ public static class ConfiguracaoDaAplicacao
         servicos.AddScoped<RenovacaoDeSessao>();
         servicos.AddScoped<EncerramentoDeSessao>();
         servicos.AddScoped<ConsultaDeUsuarioAtual>();
+        servicos.AddScoped<AltereNumeroDeCelular>();
+        servicos.AddScoped<AlterePin>();
+        servicos.AddScoped<RecupereAcessoDoUsuario>();
         servicos.AddScoped<EditePerfilDoUsuario>();
         servicos.AddScoped<AltereFotoDePerfil>();
         servicos.AddScoped<RemovaFotoDePerfil>();

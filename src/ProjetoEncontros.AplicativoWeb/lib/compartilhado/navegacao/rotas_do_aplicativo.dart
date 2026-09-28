@@ -4,23 +4,13 @@ import 'package:go_router/go_router.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/autenticacao/controlador_de_sessao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/autenticacao/estado_da_sessao.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/navegacao/estrutura_com_navegacao.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/combinados/telas/tela_de_combinados.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/convites_por_link/telas/tela_de_convite_por_link.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/entrada/telas/tela_de_cadastro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/entrada/telas/tela_de_entrada.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/entrada/telas/tela_de_inicializacao.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/telas/tela_de_criacao_de_encontro.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/telas/tela_de_detalhe_do_encontro.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/telas/tela_de_participantes_do_encontro.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/grupos/telas/tela_de_grupos.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/inicio/telas/tela_inicial.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/telas/tela_de_memorias.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/telas/tela_de_midias_do_encontro.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/notificacoes/telas/tela_de_notificacoes.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/notificacoes/telas/tela_de_preferencias_de_notificacao.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/perfil/telas/tela_de_perfil.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/pessoas_frequentes/telas/tela_de_pessoas.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/pessoas_frequentes/telas/tela_de_historico_com_pessoa.dart';
-import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/telas/tela_de_momentos_do_encontro.dart';
 
 final provedorDasRotas = Provider<GoRouter>((Ref referencia) {
   NotificadorDeRotas notificador = NotificadorDeRotas();
@@ -68,97 +58,6 @@ final provedorDasRotas = Provider<GoRouter>((Ref referencia) {
           );
         },
       ),
-      GoRoute(
-        path: '/convite/:token',
-        builder: (BuildContext context, GoRouterState estado) {
-          return TelaDeConvitePorLink(
-            token: estado.pathParameters['token']!,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/pessoas/:identificadorDaPessoa',
-        builder: (BuildContext context, GoRouterState estado) {
-          return TelaDeHistoricoComPessoa(
-            identificadorDaPessoa:
-                estado.pathParameters['identificadorDaPessoa']!,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/encontros/novo',
-        builder: (BuildContext context, GoRouterState estado) {
-          return const TelaDeCriacaoDeEncontro();
-        },
-      ),
-      GoRoute(
-        path: '/encontros/:identificadorDoEncontro/editar',
-        builder: (BuildContext context, GoRouterState estado) {
-          return TelaDeCriacaoDeEncontro(
-            identificadorDoEncontro:
-                estado.pathParameters['identificadorDoEncontro']!,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/encontros/:identificadorDoEncontro',
-        builder: (BuildContext context, GoRouterState estado) {
-          return TelaDeMomentosDoEncontro(
-            identificadorDoEncontro:
-                estado.pathParameters['identificadorDoEncontro']!,
-            soliciteRespostaDePresenca:
-                estado.uri.queryParameters['responder-presenca'] == 'true',
-          );
-        },
-      ),
-      GoRoute(
-        path: '/encontros/:identificadorDoEncontro/informacoes',
-        builder: (BuildContext context, GoRouterState estado) {
-          return TelaDeDetalheDoEncontro(
-            identificadorDoEncontro:
-                estado.pathParameters['identificadorDoEncontro']!,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/encontros/:identificadorDoEncontro/participantes',
-        builder: (BuildContext context, GoRouterState estado) {
-          return TelaDeParticipantesDoEncontro(
-            identificadorDoEncontro:
-                estado.pathParameters['identificadorDoEncontro']!,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/encontros/:identificadorDoEncontro/midias',
-        builder: (BuildContext context, GoRouterState estado) {
-          return TelaDeMidiasDoEncontro(
-            identificadorDoEncontro:
-                estado.pathParameters['identificadorDoEncontro']!,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/encontros/:identificadorDoEncontro/combinados',
-        builder: (BuildContext context, GoRouterState estado) {
-          return TelaDeCombinados(
-            identificadorDoEncontro:
-                estado.pathParameters['identificadorDoEncontro']!,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/notificacoes',
-        builder: (BuildContext context, GoRouterState estado) {
-          return const TelaDeNotificacoes();
-        },
-      ),
-      GoRoute(
-        path: '/perfil/notificacoes',
-        builder: (BuildContext context, GoRouterState estado) {
-          return const TelaDePreferenciasDeNotificacao();
-        },
-      ),
       ShellRoute(
         builder: (
           BuildContext context,
@@ -178,15 +77,15 @@ final provedorDasRotas = Provider<GoRouter>((Ref referencia) {
             },
           ),
           GoRoute(
-            path: '/pessoas',
+            path: '/grupos',
             builder: (BuildContext context, GoRouterState estado) {
-              return const TelaDePessoas();
+              return const TelaDeGrupos();
             },
           ),
           GoRoute(
-            path: '/memorias',
+            path: '/pessoas',
             builder: (BuildContext context, GoRouterState estado) {
-              return const TelaDeMemorias();
+              return const TelaDePessoas();
             },
           ),
           GoRoute(
@@ -220,9 +119,7 @@ String? redirecioneRota({
           ? '/inicializacao'
           : Uri(
               path: '/inicializacao',
-              queryParameters: <String, String>{
-                'retorno': retorno,
-              },
+              queryParameters: <String, String>{'retorno': retorno},
             ).toString();
     }
 
@@ -248,14 +145,16 @@ String? redirecioneRota({
 
     return Uri(
       path: '/entrada',
-      queryParameters: <String, String>{
-        'retorno': destinoAposEntrada!,
-      },
+      queryParameters: <String, String>{'retorno': destinoAposEntrada!},
     ).toString();
   }
 
   if (rotaEhPublica || rotaEhInicializacao) {
     return retorno ?? '/inicio';
+  }
+
+  if (!_rotaAutenticadaExiste(caminho)) {
+    return '/inicio';
   }
 
   return null;
@@ -267,11 +166,18 @@ String? _obtenhaRetornoValido(Uri enderecoDaRota) {
 }
 
 bool _retornoEhValido(String? retorno) {
-  return retorno != null &&
-      retorno.startsWith('/') &&
-      !retorno.startsWith('/entrada') &&
-      !retorno.startsWith('/cadastro') &&
-      !retorno.startsWith('/inicializacao');
+  if (retorno == null || !retorno.startsWith('/')) {
+    return false;
+  }
+
+  return _rotaAutenticadaExiste(Uri.parse(retorno).path);
+}
+
+bool _rotaAutenticadaExiste(String caminho) {
+  return caminho == '/inicio' ||
+      caminho == '/grupos' ||
+      caminho == '/pessoas' ||
+      caminho == '/perfil';
 }
 
 class NotificadorDeRotas extends ChangeNotifier {

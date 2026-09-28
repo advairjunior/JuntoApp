@@ -17,8 +17,8 @@ public sealed class GeradorDeTokenDeAcesso(IConfiguration configuracao) : IGerad
         Claim[] claims =
         [
             new(JwtRegisteredClaimNames.Sub, usuario.Identificador.ToString()),
-            new(JwtRegisteredClaimNames.Email, usuario.Email.Valor),
-            new("nome", usuario.Nome)
+            new("nome", usuario.Nome),
+            new("role", usuario.Papel.ToString())
         ];
 
         SymmetricSecurityKey chave = new(Encoding.UTF8.GetBytes(_configuracao.Chave));

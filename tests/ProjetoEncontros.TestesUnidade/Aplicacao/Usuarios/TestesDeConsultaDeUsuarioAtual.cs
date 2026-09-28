@@ -14,11 +14,12 @@ public sealed class TestesDeConsultaDeUsuarioAtual
     public async Task ObtenhaAsync_DeveRetornarUsuarioAtual()
     {
         RepositorioDeUsuariosFalso repositorioDeUsuarios = new();
-        repositorioDeUsuarios.Usuario = Usuario.Crie(
+        repositorioDeUsuarios.Usuario = Usuario.CrieComCelularEPin(
             Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             "Maria Souza",
-            Email.Crie("maria@email.com"),
-            "hash::senha-segura",
+            NumeroDeCelular.Crie("62999998888"),
+            "hash::123456",
+            PapelDoUsuario.Pessoa,
             Agora);
         ConsultaDeUsuarioAtual consultaDeUsuarioAtual = new(repositorioDeUsuarios);
 
@@ -28,7 +29,8 @@ public sealed class TestesDeConsultaDeUsuarioAtual
 
         Assert.Equal(repositorioDeUsuarios.Usuario.Identificador, resposta.Identificador);
         Assert.Equal("Maria Souza", resposta.Nome);
-        Assert.Equal("maria@email.com", resposta.Email);
+        Assert.Equal("+5562999998888", resposta.NumeroDeCelular);
+        Assert.Equal(PapelDoUsuario.Pessoa, resposta.Papel);
     }
 
     [Fact]

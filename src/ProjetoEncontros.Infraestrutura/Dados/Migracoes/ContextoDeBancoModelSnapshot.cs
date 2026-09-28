@@ -973,22 +973,38 @@ namespace ProjetoEncontros.Infraestrutura.Dados.Migracoes
                         .HasColumnName("criado_em");
 
                     b.Property<string>("Email")
-                        .IsRequired()
                         .HasMaxLength(254)
                         .HasColumnType("character varying(254)")
                         .HasColumnName("email");
 
                     b.Property<string>("HashDaSenha")
-                        .IsRequired()
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasColumnName("hash_da_senha");
+
+                    b.Property<string>("HashDoPin")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("hash_do_pin");
 
                     b.Property<string>("Nome")
                         .IsRequired()
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)")
                         .HasColumnName("nome");
+
+                    b.Property<string>("NumeroDeCelular")
+                        .HasMaxLength(14)
+                        .HasColumnType("character varying(14)")
+                        .HasColumnName("numero_de_celular");
+
+                    b.Property<string>("Papel")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("Pessoa")
+                        .HasColumnName("papel");
 
                     b.Property<string>("Situacao")
                         .IsRequired()
@@ -1004,6 +1020,9 @@ namespace ProjetoEncontros.Infraestrutura.Dados.Migracoes
                     b.HasKey("Identificador");
 
                     b.HasIndex("Email")
+                        .IsUnique();
+
+                    b.HasIndex("NumeroDeCelular")
                         .IsUnique();
 
                     b.ToTable("usuarios", (string)null);

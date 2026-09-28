@@ -6,6 +6,29 @@ namespace ProjetoEncontros.Infraestrutura.Dados.Repositorios;
 
 public sealed class RepositorioDeUsuarios(ContextoDeBanco contextoDeBanco) : IRepositorioDeUsuarios
 {
+    public async Task<bool> ExisteComNumeroDeCelularAsync(
+        NumeroDeCelular numeroDeCelular,
+        CancellationToken cancellationToken)
+    {
+        return await contextoDeBanco.Usuarios.AnyAsync(
+            usuario => usuario.NumeroDeCelular == numeroDeCelular,
+            cancellationToken);
+    }
+
+    public async Task<Usuario?> ObtenhaPorNumeroDeCelularAsync(
+        NumeroDeCelular numeroDeCelular,
+        CancellationToken cancellationToken)
+    {
+        return await contextoDeBanco.Usuarios.FirstOrDefaultAsync(
+            usuario => usuario.NumeroDeCelular == numeroDeCelular,
+            cancellationToken);
+    }
+
+    public async Task<bool> ExisteAlgumAsync(CancellationToken cancellationToken)
+    {
+        return await contextoDeBanco.Usuarios.AnyAsync(cancellationToken);
+    }
+
     public async Task<bool> ExisteComEmailAsync(Email email, CancellationToken cancellationToken)
     {
         return await contextoDeBanco.Usuarios.AnyAsync(usuario => usuario.Email == email, cancellationToken);

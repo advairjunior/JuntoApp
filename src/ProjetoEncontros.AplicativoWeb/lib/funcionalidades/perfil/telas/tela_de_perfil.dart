@@ -726,9 +726,9 @@ class _ConteudoDoPerfil extends StatelessWidget {
           filho: Column(
             children: <Widget>[
               _LinhaDoPerfil(
-                icone: Icons.mail_outline_rounded,
-                titulo: 'E-mail',
-                valor: usuario.email,
+                icone: Icons.phone_android_rounded,
+                titulo: 'Celular',
+                valor: usuario.numeroDeCelular,
               ),
               const Divider(height: 1, indent: 56),
               const _LinhaDoPerfil(
@@ -739,37 +739,23 @@ class _ConteudoDoPerfil extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: EspacamentosDoAplicativo.grande),
-        const TituloDeSecao(titulo: 'Preferências'),
-        const SizedBox(height: EspacamentosDoAplicativo.medio),
-        CartaoDoAplicativo(
-          preenchimento: EdgeInsets.zero,
-          filho: Column(
-            children: <Widget>[
-              _LinhaDoPerfil(
-                chave: const Key('abrir-preferencias-de-notificacao'),
-                icone: Icons.notifications_none_rounded,
-                titulo: 'Notificações',
-                valor: 'Escolha quais avisos deseja receber',
-                aoTocar: () => context.push<void>('/perfil/notificacoes'),
-              ),
-              if (situacaoDaInstalacao !=
-                  SituacaoDaInstalacao.instalada) ...<Widget>[
-                const Divider(height: 1, indent: 56),
-                _LinhaDoPerfil(
-                  chave: const Key('instalar-aplicativo'),
-                  icone: Icons.install_mobile_rounded,
-                  titulo: 'Instalar Juntô',
-                  valor:
-                      situacaoDaInstalacao == SituacaoDaInstalacao.podeSolicitar
-                          ? 'Use como aplicativo neste dispositivo'
-                          : 'Adicionar à tela inicial',
-                  aoTocar: aoInstalar,
-                ),
-              ],
-            ],
+        if (situacaoDaInstalacao != SituacaoDaInstalacao.instalada) ...<Widget>[
+          const SizedBox(height: EspacamentosDoAplicativo.grande),
+          const TituloDeSecao(titulo: 'Aplicativo'),
+          const SizedBox(height: EspacamentosDoAplicativo.medio),
+          CartaoDoAplicativo(
+            preenchimento: EdgeInsets.zero,
+            filho: _LinhaDoPerfil(
+              chave: const Key('instalar-aplicativo'),
+              icone: Icons.install_mobile_rounded,
+              titulo: 'Instalar Juntô',
+              valor: situacaoDaInstalacao == SituacaoDaInstalacao.podeSolicitar
+                  ? 'Use como aplicativo neste dispositivo'
+                  : 'Adicionar à tela inicial',
+              aoTocar: aoInstalar,
+            ),
           ),
-        ),
+        ],
         const SizedBox(height: EspacamentosDoAplicativo.grande),
         const TituloDeSecao(titulo: 'Sessão'),
         const SizedBox(height: EspacamentosDoAplicativo.medio),

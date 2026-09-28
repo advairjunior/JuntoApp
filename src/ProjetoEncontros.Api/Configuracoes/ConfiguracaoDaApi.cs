@@ -1,19 +1,25 @@
+using System.Net;
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using ProjetoEncontros.Api.Middlewares;
 using ProjetoEncontros.Api.Saude;
+using ProjetoEncontros.Dominio.Usuarios;
 
 namespace ProjetoEncontros.Api.Configuracoes;
 
 public static class ConfiguracaoDaApi
 {
     private const string NomeDaPoliticaDoAplicativoWeb = "AplicativoWeb";
+    private const string NomeDaPoliticaDeEntrada = "Entrada";
+    private const string NomeDaPoliticaDeAdministrador = "AdministradorDoSistema";
 
     public static IServiceCollection AdicioneConfiguracaoDaApi(
         this IServiceCollection servicos,
@@ -26,7 +32,13 @@ public static class ConfiguracaoDaApi
         servicos.AdicioneCorsDoAplicativoWeb(configuracao);
         servicos.AdicioneCabecalhosEncaminhados(configuracao);
         servicos.AdicioneVerificacoesDeSaude();
-        servicos.AddAuthorization();
+        servicos.AdicioneLimiteDeTentativasDeEntrada();
+        servicos.AddAuthorization(opcoes =>
+        {
+            opcoes.AddPolicy(
+                NomeDaPoliticaDeAdministrador,
+                politica => politica.RequireRole(PapelDoUsuario.AdministradorDoSistema.ToString()));
+        });
 
         return servicos;
     }
@@ -57,6 +69,8 @@ public static class ConfiguracaoDaApi
 
         aplicacao.UseCors(NomeDaPoliticaDoAplicativoWeb);
         aplicacao.UseArquivosDoAplicativoWeb();
+        aplicacao.UseRouting();
+        aplicacao.UseRateLimiter();
         aplicacao.UseAuthentication();
         aplicacao.UseAuthorization();
         aplicacao.MapeieVerificacoesDeSaude();
@@ -106,8 +120,20 @@ public static class ConfiguracaoDaApi
 
             if (proxyReversoHabilitado)
             {
-                opcoes.KnownIPNetworks.Clear();
-                opcoes.KnownProxies.Clear();
+                string[] proxiesConhecidos = configuracao
+                    .GetSection("ProxyReverso:ProxiesConhecidos")
+                    .Get<string[]>() ?? [];
+
+                foreach (string proxyConhecido in proxiesConhecidos)
+                {
+                    if (!IPAddress.TryParse(proxyConhecido, out IPAddress? endereco))
+                    {
+                        throw new InvalidOperationException(
+                            $"Proxy reverso conhecido invalido: {proxyConhecido}.");
+                    }
+
+                    opcoes.KnownProxies.Add(endereco);
+                }
             }
         });
 
@@ -124,6 +150,33 @@ public static class ConfiguracaoDaApi
             .AddCheck<VerificacaoDeProntidao>(
                 "dependencias",
                 tags: ["ready"]);
+
+        return servicos;
+    }
+
+    private static IServiceCollection AdicioneLimiteDeTentativasDeEntrada(
+        this IServiceCollection servicos)
+    {
+        servicos.AddRateLimiter(opcoes =>
+        {
+            opcoes.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            opcoes.AddPolicy(NomeDaPoliticaDeEntrada, contexto =>
+            {
+                string enderecoIp = contexto.Connection.RemoteIpAddress?.ToString()
+                    ?? "ip-desconhecido";
+
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    enderecoIp,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromMinutes(15),
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        AutoReplenishment = true
+                    });
+            });
+        });
 
         return servicos;
     }
@@ -281,7 +334,8 @@ public static class ConfiguracaoDaApi
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = chaveDeAssinatura,
                     ValidateLifetime = true,
-                    ClockSkew = TimeSpan.Zero
+                    ClockSkew = TimeSpan.Zero,
+                    RoleClaimType = "role"
                 };
             });
 

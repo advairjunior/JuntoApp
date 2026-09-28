@@ -12,6 +12,9 @@ public sealed class MapeamentoDeUsuario : IEntityTypeConfiguration<Usuario>
         ValueConverter<Email, string> conversorDeEmail = new(
             email => email.Valor,
             valor => Email.Crie(valor));
+        ValueConverter<NumeroDeCelular?, string?> conversorDeNumeroDeCelular = new(
+            numero => numero == null ? null : numero.Valor,
+            valor => valor == null ? null : NumeroDeCelular.Crie(valor));
 
         construtor.ToTable("usuarios");
 
@@ -30,7 +33,7 @@ public sealed class MapeamentoDeUsuario : IEntityTypeConfiguration<Usuario>
             .HasColumnName("email")
             .HasMaxLength(254)
             .HasConversion(conversorDeEmail)
-            .IsRequired();
+            .IsRequired(false);
 
         construtor.HasIndex(usuario => usuario.Email)
             .IsUnique();
@@ -38,6 +41,25 @@ public sealed class MapeamentoDeUsuario : IEntityTypeConfiguration<Usuario>
         construtor.Property(usuario => usuario.HashDaSenha)
             .HasColumnName("hash_da_senha")
             .HasMaxLength(500)
+            .IsRequired(false);
+
+        construtor.Property(usuario => usuario.NumeroDeCelular)
+            .HasColumnName("numero_de_celular")
+            .HasMaxLength(14)
+            .HasConversion(conversorDeNumeroDeCelular);
+
+        construtor.HasIndex(usuario => usuario.NumeroDeCelular)
+            .IsUnique();
+
+        construtor.Property(usuario => usuario.HashDoPin)
+            .HasColumnName("hash_do_pin")
+            .HasMaxLength(500);
+
+        construtor.Property(usuario => usuario.Papel)
+            .HasColumnName("papel")
+            .HasConversion<string>()
+            .HasMaxLength(40)
+            .HasDefaultValue(PapelDoUsuario.Pessoa)
             .IsRequired();
 
         construtor.Property(usuario => usuario.Situacao)
@@ -55,5 +77,6 @@ public sealed class MapeamentoDeUsuario : IEntityTypeConfiguration<Usuario>
             .IsRequired();
 
         construtor.Ignore(usuario => usuario.EstaAtivo);
+        construtor.Ignore(usuario => usuario.EhAdministradorDoSistema);
     }
 }

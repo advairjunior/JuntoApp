@@ -23,15 +23,16 @@ class TelaDeCadastro extends ConsumerStatefulWidget {
 class _EstadoDaTelaDeCadastro extends ConsumerState<TelaDeCadastro> {
   final GlobalKey<FormState> _chaveDoFormulario = GlobalKey<FormState>();
   final TextEditingController _controladorDoNome = TextEditingController();
-  final TextEditingController _controladorDoEmail = TextEditingController();
-  final TextEditingController _controladorDaSenha = TextEditingController();
-  bool _senhaEstaVisivel = false;
+  final TextEditingController _controladorDoNumeroDeCelular =
+      TextEditingController();
+  final TextEditingController _controladorDoPin = TextEditingController();
+  bool _pinEstaVisivel = false;
 
   @override
   void dispose() {
     _controladorDoNome.dispose();
-    _controladorDoEmail.dispose();
-    _controladorDaSenha.dispose();
+    _controladorDoNumeroDeCelular.dispose();
+    _controladorDoPin.dispose();
     super.dispose();
   }
 
@@ -127,25 +128,30 @@ class _EstadoDaTelaDeCadastro extends ConsumerState<TelaDeCadastro> {
                             height: EspacamentosDoAplicativo.medio,
                           ),
                           TextFormField(
-                            controller: _controladorDoEmail,
+                            controller: _controladorDoNumeroDeCelular,
                             enabled: !sessao.operacaoEstaEmAndamento,
-                            keyboardType: TextInputType.emailAddress,
+                            keyboardType: TextInputType.phone,
                             textInputAction: TextInputAction.next,
-                            autofillHints: const <String>[AutofillHints.email],
+                            autofillHints: const <String>[
+                              AutofillHints.telephoneNumber,
+                            ],
                             decoration: const InputDecoration(
-                              hintText: 'E-mail',
-                              prefixIcon: Icon(Icons.mail_outline_rounded),
+                              hintText: 'Celular',
+                              prefixIcon: Icon(Icons.phone_android_rounded),
                             ),
-                            validator: (String? email) {
-                              String valor = email?.trim() ?? '';
+                            validator: (String? numeroDeCelular) {
+                              String valor = numeroDeCelular?.trim() ?? '';
 
                               if (valor.isEmpty) {
-                                return 'Informe seu e-mail.';
+                                return 'Informe seu celular.';
                               }
 
-                              if (!valor.contains('@') ||
-                                  !valor.contains('.')) {
-                                return 'Informe um e-mail válido.';
+                              String apenasDigitos =
+                                  valor.replaceAll(RegExp(r'\D'), '');
+
+                              if (apenasDigitos.length != 11 &&
+                                  apenasDigitos.length != 13) {
+                                return 'Informe um celular com DDD.';
                               }
 
                               return null;
@@ -155,45 +161,42 @@ class _EstadoDaTelaDeCadastro extends ConsumerState<TelaDeCadastro> {
                             height: EspacamentosDoAplicativo.medio,
                           ),
                           TextFormField(
-                            controller: _controladorDaSenha,
+                            controller: _controladorDoPin,
                             enabled: !sessao.operacaoEstaEmAndamento,
-                            obscureText: !_senhaEstaVisivel,
+                            keyboardType: TextInputType.number,
+                            obscureText: !_pinEstaVisivel,
                             textInputAction: TextInputAction.done,
                             autofillHints: const <String>[
                               AutofillHints.newPassword,
                             ],
                             onFieldSubmitted: (_) => _cadastreAsync(),
                             decoration: InputDecoration(
-                              hintText: 'Senha',
+                              hintText: 'PIN de 6 dígitos',
                               prefixIcon: const Icon(
                                 Icons.lock_outline_rounded,
                               ),
                               suffixIcon: IconButton(
-                                tooltip: _senhaEstaVisivel
-                                    ? 'Ocultar senha'
-                                    : 'Mostrar senha',
+                                tooltip: _pinEstaVisivel
+                                    ? 'Ocultar PIN'
+                                    : 'Mostrar PIN',
                                 onPressed: sessao.operacaoEstaEmAndamento
                                     ? null
                                     : () {
                                         setState(() {
-                                          _senhaEstaVisivel =
-                                              !_senhaEstaVisivel;
+                                          _pinEstaVisivel = !_pinEstaVisivel;
                                         });
                                       },
                                 icon: Icon(
-                                  _senhaEstaVisivel
+                                  _pinEstaVisivel
                                       ? Icons.visibility_off_outlined
                                       : Icons.visibility_outlined,
                                 ),
                               ),
                             ),
-                            validator: (String? senha) {
-                              if (senha == null || senha.length < 8) {
-                                return 'Use pelo menos 8 caracteres.';
-                              }
-
-                              if (senha.length > 100) {
-                                return 'A senha deve ter no máximo 100 caracteres.';
+                            validator: (String? pin) {
+                              if (pin == null ||
+                                  !RegExp(r'^\d{6}$').hasMatch(pin)) {
+                                return 'O PIN deve ter exatamente 6 dígitos.';
                               }
 
                               return null;
@@ -250,8 +253,8 @@ class _EstadoDaTelaDeCadastro extends ConsumerState<TelaDeCadastro> {
     bool cadastroFoiConcluido =
         await ref.read(provedorDoControladorDeSessao.notifier).cadastreAsync(
               nome: _controladorDoNome.text.trim(),
-              email: _controladorDoEmail.text.trim(),
-              senha: _controladorDaSenha.text,
+              numeroDeCelular: _controladorDoNumeroDeCelular.text.trim(),
+              pin: _controladorDoPin.text,
             );
 
     if (cadastroFoiConcluido && mounted) {

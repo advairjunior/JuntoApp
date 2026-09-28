@@ -84,7 +84,7 @@ class _RepositorioDaPaginaInicialFalso
     return const UsuarioAtual(
       identificador: 'usuario-1',
       nome: 'Pessoa Teste',
-      email: 'pessoa@teste.com',
+      numeroDeCelular: '+5562999998888',
     );
   }
 }

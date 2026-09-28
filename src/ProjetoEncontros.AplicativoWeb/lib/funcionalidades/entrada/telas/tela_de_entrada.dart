@@ -28,14 +28,15 @@ class TelaDeEntrada extends ConsumerStatefulWidget {
 
 class _EstadoDaTelaDeEntrada extends ConsumerState<TelaDeEntrada> {
   final GlobalKey<FormState> _chaveDoFormulario = GlobalKey<FormState>();
-  final TextEditingController _controladorDoEmail = TextEditingController();
-  final TextEditingController _controladorDaSenha = TextEditingController();
-  bool _senhaEstaVisivel = false;
+  final TextEditingController _controladorDoNumeroDeCelular =
+      TextEditingController();
+  final TextEditingController _controladorDoPin = TextEditingController();
+  bool _pinEstaVisivel = false;
 
   @override
   void dispose() {
-    _controladorDoEmail.dispose();
-    _controladorDaSenha.dispose();
+    _controladorDoNumeroDeCelular.dispose();
+    _controladorDoPin.dispose();
     super.dispose();
   }
 
@@ -89,20 +90,21 @@ class _EstadoDaTelaDeEntrada extends ConsumerState<TelaDeEntrada> {
                           ),
                           _FormularioDeEntrada(
                             chaveDoFormulario: _chaveDoFormulario,
-                            controladorDoEmail: _controladorDoEmail,
-                            controladorDaSenha: _controladorDaSenha,
+                            controladorDoNumeroDeCelular:
+                                _controladorDoNumeroDeCelular,
+                            controladorDoPin: _controladorDoPin,
                             sessao: sessao,
-                            senhaEstaVisivel: _senhaEstaVisivel,
+                            pinEstaVisivel: _pinEstaVisivel,
                             cadastroFoiConcluido: widget.cadastroFoiConcluido,
-                            aoAlternarVisibilidadeDaSenha: () {
+                            aoAlternarVisibilidadeDoPin: () {
                               setState(() {
-                                _senhaEstaVisivel = !_senhaEstaVisivel;
+                                _pinEstaVisivel = !_pinEstaVisivel;
                               });
                             },
                             aoEntrar: _entreAsync,
                             aoCriarConta: _abraCadastro,
-                            valideEmail: _valideEmail,
-                            valideSenha: _valideSenha,
+                            valideNumeroDeCelular: _valideNumeroDeCelular,
+                            validePin: _validePin,
                           ),
                         ],
                       ),
@@ -125,8 +127,8 @@ class _EstadoDaTelaDeEntrada extends ConsumerState<TelaDeEntrada> {
     }
 
     await ref.read(provedorDoControladorDeSessao.notifier).autentiqueAsync(
-          email: _controladorDoEmail.text.trim(),
-          senha: _controladorDaSenha.text,
+          numeroDeCelular: _controladorDoNumeroDeCelular.text.trim(),
+          pin: _controladorDoPin.text,
         );
   }
 
@@ -141,23 +143,25 @@ class _EstadoDaTelaDeEntrada extends ConsumerState<TelaDeEntrada> {
     );
   }
 
-  String? _valideEmail(String? email) {
-    String valor = email?.trim() ?? '';
+  String? _valideNumeroDeCelular(String? numeroDeCelular) {
+    String valor = numeroDeCelular?.trim() ?? '';
 
     if (valor.isEmpty) {
-      return 'Informe seu e-mail.';
+      return 'Informe seu celular.';
     }
 
-    if (!valor.contains('@') || !valor.contains('.')) {
-      return 'Informe um e-mail válido.';
+    String apenasDigitos = valor.replaceAll(RegExp(r'\D'), '');
+
+    if (apenasDigitos.length != 11 && apenasDigitos.length != 13) {
+      return 'Informe um celular com DDD.';
     }
 
     return null;
   }
 
-  String? _valideSenha(String? senha) {
-    if (senha == null || senha.isEmpty) {
-      return 'Informe sua senha.';
+  String? _validePin(String? pin) {
+    if (pin == null || !RegExp(r'^\d{6}$').hasMatch(pin)) {
+      return 'O PIN deve ter exatamente 6 dígitos.';
     }
 
     return null;
@@ -225,29 +229,29 @@ class _MarcaDoAplicativo extends StatelessWidget {
 class _FormularioDeEntrada extends StatelessWidget {
   const _FormularioDeEntrada({
     required this.chaveDoFormulario,
-    required this.controladorDoEmail,
-    required this.controladorDaSenha,
+    required this.controladorDoNumeroDeCelular,
+    required this.controladorDoPin,
     required this.sessao,
-    required this.senhaEstaVisivel,
+    required this.pinEstaVisivel,
     required this.cadastroFoiConcluido,
-    required this.aoAlternarVisibilidadeDaSenha,
+    required this.aoAlternarVisibilidadeDoPin,
     required this.aoEntrar,
     required this.aoCriarConta,
-    required this.valideEmail,
-    required this.valideSenha,
+    required this.valideNumeroDeCelular,
+    required this.validePin,
   });
 
   final GlobalKey<FormState> chaveDoFormulario;
-  final TextEditingController controladorDoEmail;
-  final TextEditingController controladorDaSenha;
+  final TextEditingController controladorDoNumeroDeCelular;
+  final TextEditingController controladorDoPin;
   final EstadoDaSessao sessao;
-  final bool senhaEstaVisivel;
+  final bool pinEstaVisivel;
   final bool cadastroFoiConcluido;
-  final VoidCallback aoAlternarVisibilidadeDaSenha;
+  final VoidCallback aoAlternarVisibilidadeDoPin;
   final VoidCallback aoEntrar;
   final VoidCallback aoCriarConta;
-  final FormFieldValidator<String> valideEmail;
-  final FormFieldValidator<String> valideSenha;
+  final FormFieldValidator<String> valideNumeroDeCelular;
+  final FormFieldValidator<String> validePin;
 
   @override
   Widget build(BuildContext context) {
@@ -284,48 +288,50 @@ class _FormularioDeEntrada extends StatelessWidget {
                 ],
                 const SizedBox(height: EspacamentosDoAplicativo.grande),
                 Semantics(
-                  identifier: IdentificadoresSemanticos.entradaEmail,
+                  identifier: IdentificadoresSemanticos.entradaCelular,
                   child: TextFormField(
-                    controller: controladorDoEmail,
+                    controller: controladorDoNumeroDeCelular,
                     enabled: !sessao.operacaoEstaEmAndamento,
-                    keyboardType: TextInputType.emailAddress,
+                    keyboardType: TextInputType.phone,
                     textInputAction: TextInputAction.next,
-                    autofillHints: const <String>[AutofillHints.email],
+                    autofillHints: const <String>[
+                      AutofillHints.telephoneNumber
+                    ],
                     decoration: const InputDecoration(
-                      labelText: 'E-mail',
-                      prefixIcon: Icon(Icons.mail_outline_rounded),
+                      labelText: 'Celular',
+                      hintText: '(62) 99999-8888',
+                      prefixIcon: Icon(Icons.phone_android_rounded),
                     ),
-                    validator: valideEmail,
+                    validator: valideNumeroDeCelular,
                   ),
                 ),
                 const SizedBox(height: EspacamentosDoAplicativo.medio),
                 Semantics(
-                  identifier: IdentificadoresSemanticos.entradaSenha,
+                  identifier: IdentificadoresSemanticos.entradaPin,
                   child: TextFormField(
-                    controller: controladorDaSenha,
+                    controller: controladorDoPin,
                     enabled: !sessao.operacaoEstaEmAndamento,
-                    obscureText: !senhaEstaVisivel,
+                    keyboardType: TextInputType.number,
+                    obscureText: !pinEstaVisivel,
                     textInputAction: TextInputAction.done,
                     autofillHints: const <String>[AutofillHints.password],
                     onFieldSubmitted: (_) => aoEntrar(),
                     decoration: InputDecoration(
-                      labelText: 'Senha',
+                      labelText: 'PIN de 6 dígitos',
                       prefixIcon: const Icon(Icons.lock_outline_rounded),
                       suffixIcon: IconButton(
-                        tooltip: senhaEstaVisivel
-                            ? 'Ocultar senha'
-                            : 'Mostrar senha',
+                        tooltip: pinEstaVisivel ? 'Ocultar PIN' : 'Mostrar PIN',
                         onPressed: sessao.operacaoEstaEmAndamento
                             ? null
-                            : aoAlternarVisibilidadeDaSenha,
+                            : aoAlternarVisibilidadeDoPin,
                         icon: Icon(
-                          senhaEstaVisivel
+                          pinEstaVisivel
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
                         ),
                       ),
                     ),
-                    validator: valideSenha,
+                    validator: validePin,
                   ),
                 ),
                 if (sessao.mensagemDeErro != null) ...<Widget>[

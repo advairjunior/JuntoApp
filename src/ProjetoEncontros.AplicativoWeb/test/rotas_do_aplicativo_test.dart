@@ -3,111 +3,83 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/autenticacao/esta
 import 'package:projeto_encontros_aplicativo_web/compartilhado/navegacao/rotas_do_aplicativo.dart';
 
 void main() {
-  const String caminhoDoConvite = '/convite/token-compartilhado';
-
-  test('deve preservar convite enquanto restaura a sessao', () {
+  test('deve preservar rota do nucleo enquanto restaura a sessao', () {
     String? redirecionamento = redirecioneRota(
       sessao: const EstadoDaSessao.restaurando(),
-      enderecoDaRota: Uri.parse(caminhoDoConvite),
+      enderecoDaRota: Uri.parse('/grupos'),
     );
 
     Uri enderecoDaInicializacao = Uri.parse(redirecionamento!);
 
     expect(enderecoDaInicializacao.path, '/inicializacao');
-    expect(
-      enderecoDaInicializacao.queryParameters['retorno'],
-      caminhoDoConvite,
-    );
+    expect(enderecoDaInicializacao.queryParameters['retorno'], '/grupos');
   });
 
-  test('deve encaminhar convite para entrada preservando o retorno', () {
+  test('deve encaminhar rota privada para entrada preservando o retorno', () {
     String? redirecionamento = redirecioneRota(
       sessao: const EstadoDaSessao(
         situacao: SituacaoDaSessao.naoAutenticada,
       ),
-      enderecoDaRota: Uri.parse(caminhoDoConvite),
+      enderecoDaRota: Uri.parse('/pessoas'),
     );
 
     Uri enderecoDaEntrada = Uri.parse(redirecionamento!);
 
     expect(enderecoDaEntrada.path, '/entrada');
-    expect(enderecoDaEntrada.queryParameters['retorno'], caminhoDoConvite);
+    expect(enderecoDaEntrada.queryParameters['retorno'], '/pessoas');
   });
 
-  test('deve retomar convite depois de restaurar a sessao', () {
-    EstadoDaSessao sessaoAutenticada = EstadoDaSessao(
-      situacao: SituacaoDaSessao.autenticada,
-      tokenDeAcesso: 'token-de-teste',
-      expiraEm: DateTime.now().add(const Duration(minutes: 15)),
-    );
+  test('deve retomar rota valida depois de restaurar a sessao', () {
     String? redirecionamento = redirecioneRota(
-      sessao: sessaoAutenticada,
+      sessao: _crieSessaoAutenticada(),
       enderecoDaRota: Uri(
         path: '/inicializacao',
+        queryParameters: const <String, String>{'retorno': '/perfil'},
+      ),
+    );
+
+    expect(redirecionamento, '/perfil');
+  });
+
+  test('deve descartar retorno para rota removida depois do login', () {
+    String? redirecionamento = redirecioneRota(
+      sessao: _crieSessaoAutenticada(),
+      enderecoDaRota: Uri(
+        path: '/entrada',
         queryParameters: const <String, String>{
-          'retorno': caminhoDoConvite,
+          'retorno': '/convite/token-antigo',
         },
       ),
     );
 
-    expect(redirecionamento, caminhoDoConvite);
+    expect(redirecionamento, '/inicio');
   });
 
-  test('deve preservar convite na entrada sem sessao restaurada', () {
+  test('deve direcionar rota removida autenticada para o inicio', () {
+    String? redirecionamento = redirecioneRota(
+      sessao: _crieSessaoAutenticada(),
+      enderecoDaRota: Uri.parse('/memorias'),
+    );
+
+    expect(redirecionamento, '/inicio');
+  });
+
+  test('deve pedir entrada sem preservar uma rota removida', () {
     String? redirecionamento = redirecioneRota(
       sessao: const EstadoDaSessao(
         situacao: SituacaoDaSessao.naoAutenticada,
       ),
-      enderecoDaRota: Uri(
-        path: '/inicializacao',
-        queryParameters: const <String, String>{
-          'retorno': caminhoDoConvite,
-        },
-      ),
+      enderecoDaRota: Uri.parse('/notificacoes'),
     );
 
-    Uri enderecoDaEntrada = Uri.parse(redirecionamento!);
-
-    expect(enderecoDaEntrada.path, '/entrada');
-    expect(enderecoDaEntrada.queryParameters['retorno'], caminhoDoConvite);
+    expect(redirecionamento, '/entrada');
   });
+}
 
-  test('deve preservar convite ao restaurar sessao durante a entrada', () {
-    String? redirecionamento = redirecioneRota(
-      sessao: const EstadoDaSessao.restaurando(),
-      enderecoDaRota: Uri(
-        path: '/entrada',
-        queryParameters: const <String, String>{
-          'retorno': caminhoDoConvite,
-        },
-      ),
-    );
-
-    Uri enderecoDaInicializacao = Uri.parse(redirecionamento!);
-
-    expect(enderecoDaInicializacao.path, '/inicializacao');
-    expect(
-      enderecoDaInicializacao.queryParameters['retorno'],
-      caminhoDoConvite,
-    );
-  });
-
-  test('deve retomar convite depois do login', () {
-    EstadoDaSessao sessaoAutenticada = EstadoDaSessao(
-      situacao: SituacaoDaSessao.autenticada,
-      tokenDeAcesso: 'token-de-teste',
-      expiraEm: DateTime.now().add(const Duration(minutes: 15)),
-    );
-    String? redirecionamento = redirecioneRota(
-      sessao: sessaoAutenticada,
-      enderecoDaRota: Uri(
-        path: '/entrada',
-        queryParameters: const <String, String>{
-          'retorno': caminhoDoConvite,
-        },
-      ),
-    );
-
-    expect(redirecionamento, caminhoDoConvite);
-  });
+EstadoDaSessao _crieSessaoAutenticada() {
+  return EstadoDaSessao(
+    situacao: SituacaoDaSessao.autenticada,
+    tokenDeAcesso: 'token-de-teste',
+    expiraEm: DateTime.now().add(const Duration(minutes: 15)),
+  );
 }

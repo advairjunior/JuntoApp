@@ -4,6 +4,25 @@ namespace ProjetoEncontros.Aplicacao.Usuarios.Interfaces;
 
 public interface IRepositorioDeUsuarios
 {
+    Task<bool> ExisteComNumeroDeCelularAsync(
+        NumeroDeCelular numeroDeCelular,
+        CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException();
+    }
+
+    Task<Usuario?> ObtenhaPorNumeroDeCelularAsync(
+        NumeroDeCelular numeroDeCelular,
+        CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException();
+    }
+
+    Task<bool> ExisteAlgumAsync(CancellationToken cancellationToken)
+    {
+        throw new NotSupportedException();
+    }
+
     Task<bool> ExisteComEmailAsync(Email email, CancellationToken cancellationToken);
 
     Task<Usuario?> ObtenhaPorEmailAsync(Email email, CancellationToken cancellationToken);

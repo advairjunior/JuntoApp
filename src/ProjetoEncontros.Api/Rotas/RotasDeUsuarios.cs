@@ -29,6 +29,26 @@ public static class RotasDeUsuarios
              .Produces(StatusCodes.Status401Unauthorized)
              .Produces(StatusCodes.Status403Forbidden);
 
+        grupo.MapPut("/eu/celular", AltereNumeroDeCelularAsync)
+             .WithName("AltereNumeroDeCelular")
+             .Produces(StatusCodes.Status204NoContent)
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized);
+
+        grupo.MapPut("/eu/pin", AlterePinAsync)
+             .WithName("AlterePin")
+             .Produces(StatusCodes.Status204NoContent)
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized);
+
+        grupo.MapPut("/{identificador:guid}/recuperar-acesso", RecupereAcessoAsync)
+             .WithName("RecupereAcessoDoUsuario")
+             .RequireAuthorization("AdministradorDoSistema")
+             .Produces(StatusCodes.Status204NoContent)
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized)
+             .Produces(StatusCodes.Status403Forbidden);
+
         grupo.MapPut("/eu/foto", AltereFotoDePerfilAsync)
              .WithName("AltereFotoDePerfil")
              .DisableAntiforgery()
@@ -64,8 +84,9 @@ public static class RotasDeUsuarios
         RespostaDeUsuarioAtual resposta = new(
             usuarioAtual.Identificador,
             usuarioAtual.Nome,
-            usuarioAtual.Email,
-            RecursoDaFotoDePerfil.Crie(usuarioAtual.Identificador, usuarioAtual.UrlDaFotoDePerfil));
+            usuarioAtual.NumeroDeCelular,
+            RecursoDaFotoDePerfil.Crie(usuarioAtual.Identificador, usuarioAtual.UrlDaFotoDePerfil),
+            usuarioAtual.Papel.ToString());
 
         return Results.Ok(resposta);
     }
@@ -82,6 +103,51 @@ public static class RotasDeUsuarios
             cancellationToken);
 
         return Results.Ok(CrieResposta(usuarioAtual));
+    }
+
+    private static async Task<IResult> AltereNumeroDeCelularAsync(
+        RequisicaoDeAlteracaoDoCelular requisicao,
+        ClaimsPrincipal usuarioAutenticado,
+        AltereNumeroDeCelular altereNumeroDeCelular,
+        CancellationToken cancellationToken)
+    {
+        Guid identificadorDoUsuario = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
+        await altereNumeroDeCelular.AltereAsync(
+            new(identificadorDoUsuario, requisicao.NovoNumeroDeCelular, requisicao.PinAtual),
+            cancellationToken);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> AlterePinAsync(
+        RequisicaoDeAlteracaoDoPin requisicao,
+        ClaimsPrincipal usuarioAutenticado,
+        AlterePin alterePin,
+        CancellationToken cancellationToken)
+    {
+        Guid identificadorDoUsuario = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
+        await alterePin.AltereAsync(
+            new(identificadorDoUsuario, requisicao.PinAtual, requisicao.NovoPin),
+            cancellationToken);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> RecupereAcessoAsync(
+        Guid identificador,
+        RequisicaoDeRecuperacaoDeAcesso requisicao,
+        ClaimsPrincipal usuarioAutenticado,
+        RecupereAcessoDoUsuario recupereAcessoDoUsuario,
+        CancellationToken cancellationToken)
+    {
+        Guid identificadorDoAdministrador = UsuarioAutenticado.ObtenhaIdentificador(
+            usuarioAutenticado);
+        await recupereAcessoDoUsuario.RecupereAsync(
+            new(
+                identificadorDoAdministrador,
+                identificador,
+                requisicao.NovoNumeroDeCelular,
+                requisicao.PinTemporario),
+            cancellationToken);
+        return Results.NoContent();
     }
 
     private static async Task<IResult> AltereFotoDePerfilAsync(
@@ -147,7 +213,8 @@ public static class RotasDeUsuarios
         return new(
             usuarioAtual.Identificador,
             usuarioAtual.Nome,
-            usuarioAtual.Email,
-            RecursoDaFotoDePerfil.Crie(usuarioAtual.Identificador, usuarioAtual.UrlDaFotoDePerfil));
+            usuarioAtual.NumeroDeCelular,
+            RecursoDaFotoDePerfil.Crie(usuarioAtual.Identificador, usuarioAtual.UrlDaFotoDePerfil),
+            usuarioAtual.Papel.ToString());
     }
 }

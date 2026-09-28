@@ -43,8 +43,8 @@ class ControladorDeSessao extends StateNotifier<EstadoDaSessao> {
   }
 
   Future<bool> autentiqueAsync({
-    required String email,
-    required String senha,
+    required String numeroDeCelular,
+    required String pin,
   }) async {
     state = state.copieCom(
       operacaoEstaEmAndamento: true,
@@ -54,8 +54,8 @@ class ControladorDeSessao extends StateNotifier<EstadoDaSessao> {
     try {
       RespostaDeSessao resposta =
           await _repositorioDeAutenticacao.autentiqueAsync(
-        email: email,
-        senha: senha,
+        numeroDeCelular: numeroDeCelular,
+        pin: pin,
       );
       _definaSessaoAutenticada(resposta);
       return true;
@@ -69,8 +69,8 @@ class ControladorDeSessao extends StateNotifier<EstadoDaSessao> {
 
   Future<bool> cadastreAsync({
     required String nome,
-    required String email,
-    required String senha,
+    required String numeroDeCelular,
+    required String pin,
   }) async {
     state = state.copieCom(
       operacaoEstaEmAndamento: true,
@@ -80,8 +80,8 @@ class ControladorDeSessao extends StateNotifier<EstadoDaSessao> {
     try {
       await _repositorioDeAutenticacao.cadastreAsync(
         nome: nome,
-        email: email,
-        senha: senha,
+        numeroDeCelular: numeroDeCelular,
+        pin: pin,
       );
       state = const EstadoDaSessao(
         situacao: SituacaoDaSessao.naoAutenticada,
