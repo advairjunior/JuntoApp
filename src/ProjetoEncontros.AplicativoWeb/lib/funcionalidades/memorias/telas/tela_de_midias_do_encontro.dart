@@ -14,10 +14,13 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/componentes/folha_de_origem_da_imagem.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/estado/controlador_do_detalhe_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/estado/estado_do_detalhe_do_encontro.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/modelos/participante_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/encontros/servicos/seletor_de_imagem.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/componentes/seletor_de_pessoas_na_midia.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/dados/repositorio_de_memorias_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/modelos/memoria_do_encontro.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/modelos/midia_da_memoria.dart';
+import 'package:projeto_encontros_aplicativo_web/funcionalidades/memorias/modelos/pessoa_marcada_na_midia.dart';
 import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/telas/tela_de_momentos_do_encontro.dart';
 
 class TelaDeMidiasDoEncontro extends ConsumerStatefulWidget {
@@ -211,9 +214,25 @@ class _EstadoDaTelaDeMidiasDoEncontro
         builder: (BuildContext context) {
           return DialogoDeNovaPublicacao(
             midias: midias,
+            participantes: ref
+                    .read(
+                      provedorDoControladorDoDetalheDoEncontro(
+                        widget.identificadorDoEncontro,
+                      ),
+                    )
+                    .encontro
+                    ?.participantes ??
+                const <ParticipanteDoEncontro>[],
             legendaInicial: '',
-            aoPublicar: (String legenda) =>
-                _publiqueMidiasAsync(midias, legenda),
+            aoPublicar: (
+              String legenda,
+              Map<int, List<String>> marcacoesPorIndiceDaMidia,
+            ) =>
+                _publiqueMidiasAsync(
+              midias,
+              legenda,
+              marcacoesPorIndiceDaMidia,
+            ),
           );
         },
       );
@@ -235,6 +254,7 @@ class _EstadoDaTelaDeMidiasDoEncontro
   Future<bool> _publiqueMidiasAsync(
     List<MidiaSelecionada> midias,
     String legenda,
+    Map<int, List<String>> marcacoesPorIndiceDaMidia,
   ) async {
     try {
       await ref
@@ -243,6 +263,7 @@ class _EstadoDaTelaDeMidiasDoEncontro
             identificadorDoEncontro: widget.identificadorDoEncontro,
             midias: midias,
             legenda: legenda,
+            marcacoesPorIndiceDaMidia: marcacoesPorIndiceDaMidia,
           );
       return true;
     } on ExcecaoDaApi catch (excecao) {
@@ -345,6 +366,21 @@ class _MiniaturaDaGaleria extends StatelessWidget {
                     ],
                   ),
                 ),
+              if (publicacao.midias.any(
+                (MidiaDaMemoria midia) => midia.pessoasMarcadas.isNotEmpty,
+              ))
+                const Positioned(
+                  right: EspacamentosDoAplicativo.pequeno,
+                  bottom: EspacamentosDoAplicativo.pequeno,
+                  child: Icon(
+                    Icons.person_pin_circle_outlined,
+                    color: Colors.white,
+                    size: 20,
+                    shadows: <Shadow>[
+                      Shadow(color: Colors.black87, blurRadius: 8),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
@@ -359,24 +395,42 @@ class _MiniaturaDaGaleria extends StatelessWidget {
 
 Future<void> mostrePublicacaoDaMemoriaAsync(
   BuildContext context,
-  MemoriaDoEncontro publicacao,
-) {
+  MemoriaDoEncontro publicacao, {
+  String? identificadorDaPessoaMarcada,
+  String? identificadorDaMidiaInicial,
+}) {
+  int indiceInicial = publicacao.midias.indexWhere(
+    (MidiaDaMemoria midia) =>
+        midia.identificador == identificadorDaMidiaInicial ||
+        midia.pessoasMarcadas.any(
+          (PessoaMarcadaNaMidia pessoa) =>
+              pessoa.identificadorDoUsuario == identificadorDaPessoaMarcada,
+        ),
+  );
+
   return showDialog<void>(
     context: context,
     useSafeArea: false,
     builder: (BuildContext context) {
       return Dialog.fullscreen(
         backgroundColor: Colors.black,
-        child: _VisualizadorDaPublicacao(publicacao: publicacao),
+        child: _VisualizadorDaPublicacao(
+          publicacao: publicacao,
+          indiceInicial: indiceInicial < 0 ? 0 : indiceInicial,
+        ),
       );
     },
   );
 }
 
 class _VisualizadorDaPublicacao extends ConsumerStatefulWidget {
-  const _VisualizadorDaPublicacao({required this.publicacao});
+  const _VisualizadorDaPublicacao({
+    required this.publicacao,
+    required this.indiceInicial,
+  });
 
   final MemoriaDoEncontro publicacao;
+  final int indiceInicial;
 
   @override
   ConsumerState<_VisualizadorDaPublicacao> createState() =>
@@ -385,8 +439,18 @@ class _VisualizadorDaPublicacao extends ConsumerStatefulWidget {
 
 class _EstadoDoVisualizadorDaPublicacao
     extends ConsumerState<_VisualizadorDaPublicacao> {
-  final PageController _controlador = PageController();
-  int _indiceAtual = 0;
+  late final PageController _controlador;
+  late MemoriaDoEncontro _publicacao;
+  late int _indiceAtual;
+  bool _estaAtualizandoMarcacoes = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _publicacao = widget.publicacao;
+    _indiceAtual = widget.indiceInicial;
+    _controlador = PageController(initialPage: widget.indiceInicial);
+  }
 
   @override
   void dispose() {
@@ -396,6 +460,15 @@ class _EstadoDoVisualizadorDaPublicacao
 
   @override
   Widget build(BuildContext context) {
+    EstadoDoDetalheDoEncontro detalhe = ref.watch(
+      provedorDoControladorDoDetalheDoEncontro(
+        _publicacao.identificadorDoEncontro,
+      ),
+    );
+    List<ParticipanteDoEncontro> participantes =
+        detalhe.encontro?.participantes ?? const <ParticipanteDoEncontro>[];
+    MidiaDaMemoria midiaAtual = _publicacao.midias[_indiceAtual];
+
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -408,7 +481,7 @@ class _EstadoDoVisualizadorDaPublicacao
           icon: const Icon(Icons.close_rounded),
         ),
         actions: <Widget>[
-          if (widget.publicacao.usuarioAtual)
+          if (_publicacao.usuarioAtual)
             IconButton(
               key: const Key('remover-memoria-da-galeria'),
               tooltip: 'Remover mídia',
@@ -419,14 +492,14 @@ class _EstadoDoVisualizadorDaPublicacao
       ),
       body: Column(
         children: <Widget>[
-          _CabecalhoDaPublicacao(publicacao: widget.publicacao),
+          _CabecalhoDaPublicacao(publicacao: _publicacao),
           Expanded(
             child: Stack(
               children: <Widget>[
                 PageView.builder(
                   key: const Key('visualizador-de-midias'),
                   controller: _controlador,
-                  itemCount: widget.publicacao.midias.length,
+                  itemCount: _publicacao.midias.length,
                   onPageChanged: (int indice) {
                     setState(() {
                       _indiceAtual = indice;
@@ -434,7 +507,7 @@ class _EstadoDoVisualizadorDaPublicacao
                   },
                   itemBuilder: (BuildContext context, int indice) {
                     return _MidiaAmpliada(
-                      midia: widget.publicacao.midias[indice],
+                      midia: _publicacao.midias[indice],
                     );
                   },
                 ),
@@ -452,7 +525,7 @@ class _EstadoDoVisualizadorDaPublicacao
                       ),
                     ),
                   ),
-                if (_indiceAtual < widget.publicacao.midias.length - 1)
+                if (_indiceAtual < _publicacao.midias.length - 1)
                   Positioned(
                     right: EspacamentosDoAplicativo.pequeno,
                     top: 0,
@@ -466,7 +539,7 @@ class _EstadoDoVisualizadorDaPublicacao
                       ),
                     ),
                   ),
-                if (widget.publicacao.midias.length > 1)
+                if (_publicacao.midias.length > 1)
                   Positioned(
                     top: EspacamentosDoAplicativo.pequeno,
                     left: 0,
@@ -484,7 +557,7 @@ class _EstadoDoVisualizadorDaPublicacao
                           ),
                           child: Text(
                             '${_indiceAtual + 1}/'
-                            '${widget.publicacao.midias.length}',
+                            '${_publicacao.midias.length}',
                             style: const TextStyle(color: Colors.white),
                           ),
                         ),
@@ -494,7 +567,23 @@ class _EstadoDoVisualizadorDaPublicacao
               ],
             ),
           ),
-          _LegendaDaPublicacao(publicacao: widget.publicacao),
+          _PessoasMarcadasNaMidia(
+            pessoas: midiaAtual.pessoasMarcadas,
+            podeEditar: _publicacao.podeEditarMarcacoes &&
+                participantes.isNotEmpty &&
+                !_estaAtualizandoMarcacoes,
+            estaAtualizando: _estaAtualizandoMarcacoes,
+            aoAbrirPessoa: (PessoaMarcadaNaMidia pessoa) {
+              context.push<void>(
+                '/pessoas/${pessoa.identificadorDoUsuario}',
+              );
+            },
+            aoEditar: () => _editeMarcacoesAsync(
+              midiaAtual,
+              participantes,
+            ),
+          ),
+          _LegendaDaPublicacao(publicacao: _publicacao),
         ],
       ),
     );
@@ -539,12 +628,12 @@ class _EstadoDoVisualizadorDaPublicacao
 
     try {
       await ref.read(provedorDoRepositorioDeMemoriasDoEncontro).removaAsync(
-            identificadorDoEncontro: widget.publicacao.identificadorDoEncontro,
-            identificadorDaMemoria: widget.publicacao.identificador,
+            identificadorDoEncontro: _publicacao.identificadorDoEncontro,
+            identificadorDaMemoria: _publicacao.identificador,
           );
       ref.invalidate(
         provedorDasMemoriasDoEncontro(
-          widget.publicacao.identificadorDoEncontro,
+          _publicacao.identificadorDoEncontro,
         ),
       );
 
@@ -558,6 +647,165 @@ class _EstadoDoVisualizadorDaPublicacao
         );
       }
     }
+  }
+
+  Future<void> _editeMarcacoesAsync(
+    MidiaDaMemoria midia,
+    List<ParticipanteDoEncontro> participantes,
+  ) async {
+    List<String>? identificadores = await mostreSeletorDePessoasNaMidiaAsync(
+      context,
+      participantes: participantes,
+      identificadoresSelecionados: midia.pessoasMarcadas
+          .map(
+            (PessoaMarcadaNaMidia pessoa) => pessoa.identificadorDoUsuario,
+          )
+          .toSet(),
+    );
+
+    if (identificadores == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _estaAtualizandoMarcacoes = true;
+    });
+
+    try {
+      await ref
+          .read(provedorDoRepositorioDeMemoriasDoEncontro)
+          .atualizeMarcacoesAsync(
+            identificadorDoEncontro: _publicacao.identificadorDoEncontro,
+            identificadorDaMemoria: _publicacao.identificador,
+            identificadorDaMidia: midia.identificador,
+            identificadoresDosUsuarios: identificadores,
+          );
+
+      Set<String> selecionados = identificadores.toSet();
+      List<PessoaMarcadaNaMidia> pessoas = participantes
+          .where(
+            (ParticipanteDoEncontro participante) => selecionados.contains(
+              participante.identificadorDoUsuario,
+            ),
+          )
+          .map(
+            (ParticipanteDoEncontro participante) => PessoaMarcadaNaMidia(
+              identificadorDoUsuario: participante.identificadorDoUsuario,
+              nome: participante.nome,
+              urlDaFotoDePerfil: participante.urlDaFotoDePerfil,
+            ),
+          )
+          .toList();
+      List<MidiaDaMemoria> midias = List<MidiaDaMemoria>.from(
+        _publicacao.midias,
+      );
+      midias[_indiceAtual] = midia.copieComPessoasMarcadas(pessoas);
+
+      setState(() {
+        _publicacao = _publicacao.copieComMidias(midias);
+        _estaAtualizandoMarcacoes = false;
+      });
+      ref.invalidate(
+        provedorDasMemoriasDoEncontro(_publicacao.identificadorDoEncontro),
+      );
+    } on ExcecaoDaApi catch (excecao) {
+      if (mounted) {
+        setState(() {
+          _estaAtualizandoMarcacoes = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(excecao.mensagem)),
+        );
+      }
+    }
+  }
+}
+
+class _PessoasMarcadasNaMidia extends StatelessWidget {
+  const _PessoasMarcadasNaMidia({
+    required this.pessoas,
+    required this.podeEditar,
+    required this.estaAtualizando,
+    required this.aoAbrirPessoa,
+    required this.aoEditar,
+  });
+
+  final List<PessoaMarcadaNaMidia> pessoas;
+  final bool podeEditar;
+  final bool estaAtualizando;
+  final ValueChanged<PessoaMarcadaNaMidia> aoAbrirPessoa;
+  final VoidCallback aoEditar;
+
+  @override
+  Widget build(BuildContext context) {
+    if (pessoas.isEmpty && !podeEditar && !estaAtualizando) {
+      return const SizedBox.shrink();
+    }
+
+    return SafeArea(
+      top: false,
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: EspacamentosDoAplicativo.padrao,
+          vertical: EspacamentosDoAplicativo.pequeno,
+        ),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: pessoas.isEmpty
+                  ? const Text(
+                      'Ninguém marcado nesta mídia',
+                      style: TextStyle(color: Colors.white60),
+                    )
+                  : SizedBox(
+                      height: 42,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: pessoas.length,
+                        separatorBuilder: (_, __) => const SizedBox(
+                          width: EspacamentosDoAplicativo.pequeno,
+                        ),
+                        itemBuilder: (BuildContext context, int indice) {
+                          PessoaMarcadaNaMidia pessoa = pessoas[indice];
+                          return ActionChip(
+                            key: Key(
+                              'abrir-pessoa-marcada-'
+                              '${pessoa.identificadorDoUsuario}',
+                            ),
+                            avatar: FotoDePerfil(
+                              url: pessoa.urlDaFotoDePerfil,
+                              iniciais: pessoa.iniciais,
+                              dimensao: 28,
+                            ),
+                            label: Text(pessoa.nome),
+                            onPressed: () => aoAbrirPessoa(pessoa),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+            if (podeEditar || estaAtualizando) ...<Widget>[
+              const SizedBox(width: EspacamentosDoAplicativo.pequeno),
+              IconButton(
+                key: const Key('editar-pessoas-marcadas-na-midia'),
+                tooltip: 'Editar pessoas marcadas',
+                onPressed: podeEditar ? aoEditar : null,
+                icon: estaAtualizando
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.edit_outlined, color: Colors.white),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 

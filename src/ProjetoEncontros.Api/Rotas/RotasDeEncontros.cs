@@ -177,6 +177,16 @@ public static class RotasDeEncontros
                  .Produces(StatusCodes.Status401Unauthorized)
                  .Produces(StatusCodes.Status403Forbidden);
 
+        encontros.MapPut(
+                     "/{identificadorDoEncontro:guid}/memorias/{identificadorDaMemoria:guid}/midias/{identificadorDaMidia:guid}/marcacoes",
+                     SubstituaMarcacoesDeParticipantesNaMidiaAsync)
+                 .WithName("SubstituaMarcacoesDeParticipantesNaMidia")
+                 .Produces<IReadOnlyCollection<RespostaDePessoaMarcadaNaMidia>>(StatusCodes.Status200OK)
+                 .Produces(StatusCodes.Status400BadRequest)
+                 .Produces(StatusCodes.Status401Unauthorized)
+                 .Produces(StatusCodes.Status403Forbidden)
+                 .Produces(StatusCodes.Status404NotFound);
+
         encontros.MapDelete("/{identificadorDoEncontro:guid}/memorias/{identificadorDaMemoria:guid}", RemovaMemoriaDoEncontroAsync)
                  .WithName("RemovaMemoriaDoEncontro")
                  .Produces(StatusCodes.Status204NoContent)
@@ -816,6 +826,9 @@ public static class RotasDeEncontros
         CancellationToken cancellationToken)
     {
         Guid identificadorDoUsuario = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
+        IFormCollection formulario = await requisicao.ReadFormAsync(cancellationToken);
+        IReadOnlyDictionary<int, IReadOnlyCollection<Guid>> marcacoesPorIndice =
+            ObtenhaMarcacoesPorIndice(formulario, arquivos.Count);
         List<Stream> conteudos = arquivos
             .Select(arquivo => arquivo.OpenReadStream())
             .ToList();
@@ -827,7 +840,8 @@ public static class RotasDeEncontros
                     arquivo.FileName,
                     arquivo.ContentType,
                     arquivo.Length,
-                    conteudos[indice]))
+                    conteudos[indice],
+                    marcacoesPorIndice.GetValueOrDefault(indice, [])))
                 .ToList();
             CrieMemoriaDoEncontroComando comando = new(
                 identificadorDoUsuario,
@@ -851,6 +865,36 @@ public static class RotasDeEncontros
                 await conteudo.DisposeAsync();
             }
         }
+    }
+
+    private static async Task<IResult> SubstituaMarcacoesDeParticipantesNaMidiaAsync(
+        Guid identificadorDoEncontro,
+        Guid identificadorDaMemoria,
+        Guid identificadorDaMidia,
+        RequisicaoDeSubstituicaoDasMarcacoes requisicao,
+        ClaimsPrincipal usuarioAutenticado,
+        SubstituaMarcacoesDeParticipantesNaMidia substituaMarcacoes,
+        CancellationToken cancellationToken)
+    {
+        Guid identificadorDoUsuario = UsuarioAutenticado.ObtenhaIdentificador(usuarioAutenticado);
+        SubstituaMarcacoesDeParticipantesNaMidiaComando comando = new(
+            identificadorDoUsuario,
+            identificadorDoEncontro,
+            identificadorDaMemoria,
+            identificadorDaMidia,
+            requisicao.IdentificadoresDosUsuarios);
+        IReadOnlyCollection<PessoaMarcadaNaMidiaResposta> pessoasMarcadas =
+            await substituaMarcacoes.SubstituaAsync(comando, cancellationToken);
+        List<RespostaDePessoaMarcadaNaMidia> resposta = pessoasMarcadas
+            .Select(pessoa => new RespostaDePessoaMarcadaNaMidia(
+                pessoa.IdentificadorDoUsuario,
+                pessoa.Nome,
+                RecursoDaFotoDePerfil.Crie(
+                    pessoa.IdentificadorDoUsuario,
+                    pessoa.UrlDaFotoDePerfil)))
+            .ToList();
+
+        return Results.Ok(resposta);
     }
 
     private static async Task<IResult> RemovaMemoriaDoEncontroAsync(
@@ -1374,6 +1418,7 @@ public static class RotasDeEncontros
             memoria.Legenda,
             memoria.CriadoEm,
             memoria.UsuarioAtual,
+            memoria.PodeEditarMarcacoes,
             midias);
     }
 
@@ -1385,7 +1430,63 @@ public static class RotasDeEncontros
             midia.Identificador,
             $"/api/encontros/{memoria.IdentificadorDoEncontro}/memorias/{memoria.Identificador}/midias/{midia.Identificador}/conteudo",
             midia.TipoDeConteudo,
-            midia.TamanhoEmBytes);
+            midia.TamanhoEmBytes,
+            midia.PessoasMarcadas
+                .Select(pessoa => new RespostaDePessoaMarcadaNaMidia(
+                    pessoa.IdentificadorDoUsuario,
+                    pessoa.Nome,
+                    RecursoDaFotoDePerfil.Crie(
+                        pessoa.IdentificadorDoUsuario,
+                        pessoa.UrlDaFotoDePerfil)))
+                .ToList());
+    }
+
+    private static IReadOnlyDictionary<int, IReadOnlyCollection<Guid>> ObtenhaMarcacoesPorIndice(
+        IFormCollection formulario,
+        int quantidadeDeArquivos)
+    {
+        Dictionary<int, IReadOnlyCollection<Guid>> marcacoesPorIndice = [];
+
+        foreach (string chave in formulario.Keys.Where(chave =>
+            chave.StartsWith("marcacoes[", StringComparison.OrdinalIgnoreCase)))
+        {
+            int inicioDoIndice = chave.IndexOf('[', StringComparison.Ordinal) + 1;
+            int fimDoIndice = chave.IndexOf(']', inicioDoIndice);
+            string indiceEmTexto = fimDoIndice > inicioDoIndice
+                ? chave[inicioDoIndice..fimDoIndice]
+                : string.Empty;
+
+            if (!int.TryParse(indiceEmTexto, out int indice) ||
+                indice < 0 ||
+                indice >= quantidadeDeArquivos ||
+                fimDoIndice != chave.Length - 1)
+            {
+                throw new ExcecaoDeAplicacaoException(
+                    "As marcações devem usar o formato marcacoes[indice] e referenciar uma mídia enviada.");
+            }
+
+            List<Guid> identificadores = [];
+
+            foreach (string? valor in formulario[chave])
+            {
+                foreach (string identificadorEmTexto in (valor ?? string.Empty).Split(
+                    ',',
+                    StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (!Guid.TryParse(identificadorEmTexto, out Guid identificador))
+                    {
+                        throw new ExcecaoDeAplicacaoException(
+                            $"A marcação da mídia no índice {indice} contém um identificador inválido.");
+                    }
+
+                    identificadores.Add(identificador);
+                }
+            }
+
+            marcacoesPorIndice[indice] = identificadores;
+        }
+
+        return marcacoesPorIndice;
     }
 
     private static RespostaDeItemDoEncontro CrieRespostaDeItemDoEncontro(

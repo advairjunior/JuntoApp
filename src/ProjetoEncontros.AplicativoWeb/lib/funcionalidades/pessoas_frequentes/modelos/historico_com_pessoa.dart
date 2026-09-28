@@ -312,15 +312,11 @@ MemoriaDoEncontro _leiaMemoria(Map<String, dynamic> json) {
     legenda: json['legenda'] as String?,
     criadoEm: DateTime.parse(json['criadaEm'] as String).toLocal(),
     usuarioAtual: json['usuarioAtual'] as bool? ?? false,
+    podeEditarMarcacoes: json['podeEditarMarcacoes'] as bool? ?? false,
     midias: dadosDasMidias.map(
       (dynamic item) {
-        Map<String, dynamic> midia =
-            Map<String, dynamic>.from(item as Map<dynamic, dynamic>);
-        return MidiaDaMemoria(
-          identificador: midia['identificadorDaMidia'] as String,
-          url: midia['url'] as String,
-          tipoDeConteudo: midia['tipoDeConteudo'] as String,
-          tamanhoEmBytes: midia['tamanhoEmBytes'] as int,
+        return MidiaDaMemoria.deJson(
+          Map<String, dynamic>.from(item as Map<dynamic, dynamic>),
         );
       },
     ).toList(),

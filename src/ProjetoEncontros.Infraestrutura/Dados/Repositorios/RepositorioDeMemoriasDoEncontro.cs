@@ -16,6 +16,15 @@ public sealed class RepositorioDeMemoriasDoEncontro(ContextoDeBanco contextoDeBa
         await contextoDeBanco.MidiasDaMemoria.AddAsync(midia, cancellationToken);
     }
 
+    public async Task AdicioneMarcacoesAsync(
+        IReadOnlyCollection<MarcacaoDeParticipanteNaMidia> marcacoes,
+        CancellationToken cancellationToken)
+    {
+        await contextoDeBanco.MarcacoesDeParticipantesNasMidias.AddRangeAsync(
+            marcacoes,
+            cancellationToken);
+    }
+
     public async Task<MemoriaDoEncontro?> ObtenhaMemoriaAsync(
         Guid identificadorDaMemoria,
         CancellationToken cancellationToken)
@@ -52,6 +61,36 @@ public sealed class RepositorioDeMemoriasDoEncontro(ContextoDeBanco contextoDeBa
             .AsNoTracking()
             .Where(midia => identificadoresDasMemorias.Contains(midia.IdentificadorDaMemoria))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<MidiaDaMemoria?> ObtenhaMidiaAsync(
+        Guid identificadorDaMidia,
+        CancellationToken cancellationToken)
+    {
+        return await contextoDeBanco.MidiasDaMemoria
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                midia => midia.Identificador == identificadorDaMidia,
+                cancellationToken);
+    }
+
+    public async Task<IReadOnlyCollection<MarcacaoDeParticipanteNaMidia>> ListeMarcacoesDasMidiasAsync(
+        IReadOnlyCollection<Guid> identificadoresDasMidias,
+        CancellationToken cancellationToken)
+    {
+        if (identificadoresDasMidias.Count == 0)
+        {
+            return [];
+        }
+
+        return await contextoDeBanco.MarcacoesDeParticipantesNasMidias
+            .Where(marcacao => identificadoresDasMidias.Contains(marcacao.IdentificadorDaMidia))
+            .ToListAsync(cancellationToken);
+    }
+
+    public void RemovaMarcacoes(IReadOnlyCollection<MarcacaoDeParticipanteNaMidia> marcacoes)
+    {
+        contextoDeBanco.MarcacoesDeParticipantesNasMidias.RemoveRange(marcacoes);
     }
 
     public async Task<int> ConteMemoriasDoEncontroAsync(

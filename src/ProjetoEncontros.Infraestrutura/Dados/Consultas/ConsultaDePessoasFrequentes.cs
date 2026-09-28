@@ -213,7 +213,7 @@ public sealed class ConsultaDePessoasFrequentes(ContextoDeBanco contextoDeBanco)
             tamanho);
         (IReadOnlyCollection<MemoriaComPessoaResposta> memorias, bool temMaisMemorias) =
             await ListeMemoriasAsync(
-                identificadorDoUsuario,
+                identificadorDaPessoa,
                 encontrosRealizadosJuntos
                     .Select(encontro => encontro.Identificador)
                     .ToList(),
@@ -242,7 +242,7 @@ public sealed class ConsultaDePessoasFrequentes(ContextoDeBanco contextoDeBanco)
 
     private async Task<(IReadOnlyCollection<MemoriaComPessoaResposta> Memorias, bool TemMais)>
         ListeMemoriasAsync(
-            Guid identificadorDoUsuario,
+            Guid identificadorDaPessoa,
             IReadOnlyCollection<Guid> identificadoresDosEncontros,
             int limite,
             CancellationToken cancellationToken)
@@ -256,7 +256,12 @@ public sealed class ConsultaDePessoasFrequentes(ContextoDeBanco contextoDeBanco)
             .AsNoTracking()
             .Where(memoria =>
                 identificadoresDosEncontros.Contains(memoria.IdentificadorDoEncontro) &&
-                !memoria.RemovidaEm.HasValue)
+                !memoria.RemovidaEm.HasValue &&
+                contextoDeBanco.MidiasDaMemoria.Any(midia =>
+                    midia.IdentificadorDaMemoria == memoria.Identificador &&
+                    contextoDeBanco.MarcacoesDeParticipantesNasMidias.Any(marcacao =>
+                        marcacao.IdentificadorDaMidia == midia.Identificador &&
+                        marcacao.IdentificadorDoUsuarioMarcado == identificadorDaPessoa)))
             .Join(
                 contextoDeBanco.Usuarios.AsNoTracking(),
                 memoria => memoria.IdentificadorDoUsuarioQuePublicou,
@@ -288,7 +293,11 @@ public sealed class ConsultaDePessoasFrequentes(ContextoDeBanco contextoDeBanco)
             ? []
             : await contextoDeBanco.MidiasDaMemoria
                 .AsNoTracking()
-                .Where(midia => identificadoresDasMemorias.Contains(midia.IdentificadorDaMemoria))
+                .Where(midia =>
+                    identificadoresDasMemorias.Contains(midia.IdentificadorDaMemoria) &&
+                    contextoDeBanco.MarcacoesDeParticipantesNasMidias.Any(marcacao =>
+                        marcacao.IdentificadorDaMidia == midia.Identificador &&
+                        marcacao.IdentificadorDoUsuarioMarcado == identificadorDaPessoa))
                 .OrderBy(midia => midia.CriadoEm)
                 .ThenBy(midia => midia.Identificador)
                 .Select(midia => new MidiaConsultada

@@ -10,6 +10,7 @@ class MemoriaDoEncontro {
     required this.criadoEm,
     required this.usuarioAtual,
     required this.midias,
+    this.podeEditarMarcacoes = false,
     this.urlDaFotoDePerfilDoAutor,
     this.legenda,
   });
@@ -28,6 +29,7 @@ class MemoriaDoEncontro {
       legenda: json['legenda'] as String?,
       criadoEm: DateTime.parse(json['criadoEm'] as String).toLocal(),
       usuarioAtual: json['usuarioAtual'] as bool,
+      podeEditarMarcacoes: json['podeEditarMarcacoes'] as bool? ?? false,
       midias: dadosDasMidias
           .map(
             (dynamic item) => MidiaDaMemoria.deJson(
@@ -46,7 +48,23 @@ class MemoriaDoEncontro {
   final String? legenda;
   final DateTime criadoEm;
   final bool usuarioAtual;
+  final bool podeEditarMarcacoes;
   final List<MidiaDaMemoria> midias;
+
+  MemoriaDoEncontro copieComMidias(List<MidiaDaMemoria> novasMidias) {
+    return MemoriaDoEncontro(
+      identificador: identificador,
+      identificadorDoEncontro: identificadorDoEncontro,
+      identificadorDoUsuarioAutor: identificadorDoUsuarioAutor,
+      nomeDoAutor: nomeDoAutor,
+      urlDaFotoDePerfilDoAutor: urlDaFotoDePerfilDoAutor,
+      legenda: legenda,
+      criadoEm: criadoEm,
+      usuarioAtual: usuarioAtual,
+      podeEditarMarcacoes: podeEditarMarcacoes,
+      midias: novasMidias,
+    );
+  }
 
   PublicacaoDoEncontro convertaParaPublicacao() {
     MidiaDaMemoria? midia = midias.firstOrNull;

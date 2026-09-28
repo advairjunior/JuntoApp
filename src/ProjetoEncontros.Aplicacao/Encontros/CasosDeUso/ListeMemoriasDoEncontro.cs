@@ -17,7 +17,10 @@ public sealed class ListeMemoriasDoEncontro(
         Guid identificadorDoUsuario,
         CancellationToken cancellationToken)
     {
-        await GarantaAcessoAsync(identificadorDoEncontro, identificadorDoUsuario, cancellationToken);
+        ParticipanteDoEncontro participanteAtual = await ObtenhaParticipanteAtualAsync(
+            identificadorDoEncontro,
+            identificadorDoUsuario,
+            cancellationToken);
 
         IReadOnlyCollection<MemoriaDoEncontro> memorias = await repositorioDeMemoriasDoEncontro.ListeMemoriasDoEncontroAsync(
             identificadorDoEncontro,
@@ -25,17 +28,29 @@ public sealed class ListeMemoriasDoEncontro(
         IReadOnlyCollection<MidiaDaMemoria> midias = await repositorioDeMemoriasDoEncontro.ListeMidiasDasMemoriasAsync(
             [.. memorias.Select(memoria => memoria.Identificador)],
             cancellationToken);
-        IReadOnlyCollection<Usuario> autores = await repositorioDeUsuarios.ObtenhaPorIdentificadoresAsync(
-            [.. memorias.Select(memoria => memoria.IdentificadorDoUsuarioQuePublicou).Distinct()],
+        IReadOnlyCollection<MarcacaoDeParticipanteNaMidia> marcacoes =
+            await repositorioDeMemoriasDoEncontro.ListeMarcacoesDasMidiasAsync(
+                [.. midias.Select(midia => midia.Identificador)],
+                cancellationToken);
+        IReadOnlyCollection<Usuario> usuarios = await repositorioDeUsuarios.ObtenhaPorIdentificadoresAsync(
+            [.. memorias
+                .Select(memoria => memoria.IdentificadorDoUsuarioQuePublicou)
+                .Concat(marcacoes.Select(marcacao => marcacao.IdentificadorDoUsuarioMarcado))
+                .Distinct()],
             cancellationToken);
 
         return [.. memorias
             .Where(memoria => !memoria.EstaRemovida)
             .OrderByDescending(memoria => memoria.CriadoEm)
-            .Select(memoria => CrieResposta(memoria, midias, autores, identificadorDoUsuario))];
+            .Select(memoria => CrieResposta(
+                memoria,
+                midias,
+                marcacoes,
+                usuarios,
+                participanteAtual))];
     }
 
-    private async Task GarantaAcessoAsync(
+    private async Task<ParticipanteDoEncontro> ObtenhaParticipanteAtualAsync(
         Guid identificadorDoEncontro,
         Guid identificadorDoUsuario,
         CancellationToken cancellationToken)
@@ -59,15 +74,19 @@ public sealed class ListeMemoriasDoEncontro(
         {
             throw new UnauthorizedAccessException("Usuário não participa do encontro.");
         }
+
+        return participante;
     }
 
     private static MemoriaDoEncontroResposta CrieResposta(
         MemoriaDoEncontro memoria,
         IReadOnlyCollection<MidiaDaMemoria> midias,
-        IReadOnlyCollection<Usuario> autores,
-        Guid identificadorDoUsuarioAtual)
+        IReadOnlyCollection<MarcacaoDeParticipanteNaMidia> marcacoes,
+        IReadOnlyCollection<Usuario> usuarios,
+        ParticipanteDoEncontro participanteAtual)
     {
-        Usuario autor = autores.FirstOrDefault(usuario => usuario.Identificador == memoria.IdentificadorDoUsuarioQuePublicou)
+        Usuario autor = usuarios.FirstOrDefault(usuario =>
+            usuario.Identificador == memoria.IdentificadorDoUsuarioQuePublicou)
             ?? throw new ExcecaoDeAplicacaoException("Autor da memória não encontrado.");
         IReadOnlyCollection<MidiaDaMemoria> midiasDaMemoria = [.. midias.Where(midia => midia.IdentificadorDaMemoria == memoria.Identificador)];
 
@@ -79,11 +98,24 @@ public sealed class ListeMemoriasDoEncontro(
             autor.UrlDaFotoDePerfil,
             memoria.Legenda,
             memoria.CriadoEm,
-            memoria.IdentificadorDoUsuarioQuePublicou == identificadorDoUsuarioAtual,
+            memoria.IdentificadorDoUsuarioQuePublicou == participanteAtual.IdentificadorDoUsuario,
+            memoria.IdentificadorDoUsuarioQuePublicou == participanteAtual.IdentificadorDoUsuario ||
+                participanteAtual.EhOrganizador,
             [.. midiasDaMemoria.Select(midia => new MidiaDaMemoriaResposta(
                 midia.Identificador,
                 midia.Url,
                 midia.TipoDeConteudo,
-                midia.TamanhoEmBytes))]);
+                midia.TamanhoEmBytes,
+                [.. marcacoes
+                    .Where(marcacao => marcacao.IdentificadorDaMidia == midia.Identificador)
+                    .Select(marcacao => usuarios.FirstOrDefault(usuario =>
+                        usuario.Identificador == marcacao.IdentificadorDoUsuarioMarcado)
+                        ?? throw new ExcecaoDeAplicacaoException("Pessoa marcada não encontrada."))
+                    .OrderBy(usuario => usuario.Nome)
+                    .ThenBy(usuario => usuario.Identificador)
+                    .Select(usuario => new PessoaMarcadaNaMidiaResposta(
+                        usuario.Identificador,
+                        usuario.Nome,
+                        usuario.UrlDaFotoDePerfil))]))]);
     }
 }

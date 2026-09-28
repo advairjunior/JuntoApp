@@ -138,17 +138,20 @@ class _EstadoDaTelaDeHistoricoComPessoa
             aoAbrir: _abraEncontro,
             aoCarregarMais: _carregueMaisAsync,
           ),
-          if (historico.memorias.isNotEmpty) ...<Widget>[
-            const SizedBox(height: EspacamentosDoAplicativo.extraGrande),
-            _SecaoDeMemorias(
-              memorias: historico.memorias,
-              temMais: historico.temMaisMemorias,
-              estaCarregandoTodas: _estaCarregandoTodasMemorias,
-              aoVerTodas: _carregueTodasMemoriasAsync,
-              aoAbrir: (MemoriaDoEncontro memoria) =>
-                  mostrePublicacaoDaMemoriaAsync(context, memoria),
+          const SizedBox(height: EspacamentosDoAplicativo.extraGrande),
+          _SecaoDeMemorias(
+            nomeDaPessoa: historico.nome,
+            memorias: historico.memorias.take(6).toList(),
+            temMais: historico.temMaisMemorias,
+            estaCarregandoTodas: _estaCarregandoTodasMemorias,
+            aoVerTodas: _carregueTodasMemoriasAsync,
+            aoAbrir: (MemoriaDoEncontro memoria) =>
+                mostrePublicacaoDaMemoriaAsync(
+              context,
+              memoria,
+              identificadorDaPessoaMarcada: historico.identificadorDaPessoa,
             ),
-          ],
+          ),
           const SizedBox(height: EspacamentosDoAplicativo.extraGrande),
           SizedBox(
             width: double.infinity,
@@ -253,9 +256,9 @@ class _EstadoDaTelaDeHistoricoComPessoa
 
       if (mounted) {
         setState(() {
-          _historico = atual.substituaMemorias(resultado);
           _estaCarregandoTodasMemorias = false;
         });
+        await _mostreTodasMemoriasAsync(resultado);
       }
     } on ExcecaoDaApi catch (excecao) {
       _finalizeCarregamentoDasMemoriasComErro(excecao.mensagem);
@@ -264,6 +267,74 @@ class _EstadoDaTelaDeHistoricoComPessoa
         'Não foi possível carregar todas as memórias.',
       );
     }
+  }
+
+  Future<void> _mostreTodasMemoriasAsync(
+    HistoricoComPessoa historico,
+  ) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (BuildContext contextoDaFolha) {
+        return FractionallySizedBox(
+          heightFactor: 0.9,
+          child: Column(
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  EspacamentosDoAplicativo.padrao,
+                  EspacamentosDoAplicativo.padrao,
+                  EspacamentosDoAplicativo.pequeno,
+                  EspacamentosDoAplicativo.pequeno,
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Text(
+                        'Memórias com ${historico.nome}',
+                        style: Theme.of(contextoDaFolha).textTheme.titleLarge,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Fechar',
+                      onPressed: () => Navigator.of(contextoDaFolha).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: GridView.builder(
+                  padding: const EdgeInsets.all(
+                    EspacamentosDoAplicativo.padrao,
+                  ),
+                  itemCount: historico.memorias.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount:
+                        MediaQuery.sizeOf(contextoDaFolha).width >= 700 ? 6 : 3,
+                    crossAxisSpacing: 3,
+                    mainAxisSpacing: 3,
+                  ),
+                  itemBuilder: (BuildContext context, int indice) {
+                    MemoriaDoEncontro memoria = historico.memorias[indice];
+                    return _MiniaturaDaMemoria(
+                      memoria: memoria,
+                      aoAbrir: () => mostrePublicacaoDaMemoriaAsync(
+                        contextoDaFolha,
+                        memoria,
+                        identificadorDaPessoaMarcada:
+                            historico.identificadorDaPessoa,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _finalizeCarregamentoDasMemoriasComErro(String mensagem) {
@@ -973,6 +1044,7 @@ class _ImagemDoEncontro extends StatelessWidget {
 
 class _SecaoDeMemorias extends StatelessWidget {
   const _SecaoDeMemorias({
+    required this.nomeDaPessoa,
     required this.memorias,
     required this.temMais,
     required this.estaCarregandoTodas,
@@ -980,6 +1052,7 @@ class _SecaoDeMemorias extends StatelessWidget {
     required this.aoAbrir,
   });
 
+  final String nomeDaPessoa;
   final List<MemoriaDoEncontro> memorias;
   final bool temMais;
   final bool estaCarregandoTodas;
@@ -992,9 +1065,7 @@ class _SecaoDeMemorias extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         TituloDeSecao(
-          titulo: 'Memórias dos encontros em comum',
-          subtitulo:
-              temMais ? 'Mostrando as seis publicações mais recentes.' : null,
+          titulo: 'Memórias com $nomeDaPessoa',
           acao: temMais
               ? TextButton(
                   key: const Key('ver-todas-memorias-em-comum'),
@@ -1009,29 +1080,37 @@ class _SecaoDeMemorias extends StatelessWidget {
               : null,
         ),
         const SizedBox(height: EspacamentosDoAplicativo.medio),
-        LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints limites) {
-            int colunas = limites.maxWidth >= 700 ? 6 : 3;
+        if (memorias.isEmpty)
+          const EstadoVazio(
+            icone: Icons.photo_library_outlined,
+            titulo: 'Nenhuma memória juntos ainda',
+            descricao:
+                'Fotos e vídeos em que esta pessoa for marcada aparecerão aqui.',
+          )
+        else
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints limites) {
+              int colunas = limites.maxWidth >= 700 ? 6 : 3;
 
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: memorias.length,
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: colunas,
-                crossAxisSpacing: 3,
-                mainAxisSpacing: 3,
-              ),
-              itemBuilder: (BuildContext context, int indice) {
-                MemoriaDoEncontro memoria = memorias[indice];
-                return _MiniaturaDaMemoria(
-                  memoria: memoria,
-                  aoAbrir: () => aoAbrir(memoria),
-                );
-              },
-            );
-          },
-        ),
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: memorias.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: colunas,
+                  crossAxisSpacing: 3,
+                  mainAxisSpacing: 3,
+                ),
+                itemBuilder: (BuildContext context, int indice) {
+                  MemoriaDoEncontro memoria = memorias[indice];
+                  return _MiniaturaDaMemoria(
+                    memoria: memoria,
+                    aoAbrir: () => aoAbrir(memoria),
+                  );
+                },
+              );
+            },
+          ),
       ],
     );
   }

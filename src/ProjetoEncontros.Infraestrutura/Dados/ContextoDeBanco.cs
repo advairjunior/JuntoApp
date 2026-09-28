@@ -123,6 +123,14 @@ public sealed class ContextoDeBanco(DbContextOptions<ContextoDeBanco> opcoes) : 
         }
     }
 
+    public DbSet<MarcacaoDeParticipanteNaMidia> MarcacoesDeParticipantesNasMidias
+    {
+        get
+        {
+            return Set<MarcacaoDeParticipanteNaMidia>();
+        }
+    }
+
     public DbSet<ItemDoEncontro> ItensDoEncontro
     {
         get
@@ -163,6 +171,7 @@ public sealed class ContextoDeBanco(DbContextOptions<ContextoDeBanco> opcoes) : 
         construtorDeModelo.ApplyConfiguration(new MapeamentoDePublicacaoDoEncontro());
         construtorDeModelo.ApplyConfiguration(new MapeamentoDeMemoriaDoEncontro());
         construtorDeModelo.ApplyConfiguration(new MapeamentoDeMidiaDaMemoria());
+        construtorDeModelo.ApplyConfiguration(new MapeamentoDeMarcacaoDeParticipanteNaMidia());
         construtorDeModelo.ApplyConfiguration(new MapeamentoDeItemDoEncontro());
         construtorDeModelo.ApplyConfiguration(new MapeamentoDeNotificacaoDoUsuario());
         construtorDeModelo.ApplyConfiguration(new MapeamentoDePreferenciaDeNotificacaoDoUsuario());
