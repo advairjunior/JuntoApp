@@ -726,9 +726,9 @@ class _ConteudoDoPerfil extends StatelessWidget {
           filho: Column(
             children: <Widget>[
               _LinhaDoPerfil(
-                icone: Icons.mail_outline_rounded,
-                titulo: 'E-mail',
-                valor: usuario.email,
+                icone: Icons.phone_android_rounded,
+                titulo: 'Celular',
+                valor: usuario.numeroDeCelular,
               ),
               const Divider(height: 1, indent: 56),
               const _LinhaDoPerfil(

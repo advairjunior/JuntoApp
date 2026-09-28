@@ -2,7 +2,7 @@ class UsuarioAtual {
   const UsuarioAtual({
     required this.identificador,
     required this.nome,
-    required this.email,
+    required this.numeroDeCelular,
     this.urlDaFotoDePerfil,
   });
 
@@ -10,14 +10,14 @@ class UsuarioAtual {
     return UsuarioAtual(
       identificador: json['identificador'] as String,
       nome: json['nome'] as String,
-      email: json['email'] as String,
+      numeroDeCelular: json['numeroDeCelular'] as String,
       urlDaFotoDePerfil: json['urlDaFotoDePerfil'] as String?,
     );
   }
 
   final String identificador;
   final String nome;
-  final String email;
+  final String numeroDeCelular;
   final String? urlDaFotoDePerfil;
 
   String get primeiroNome => nome.trim().split(RegExp(r'\s+')).first;

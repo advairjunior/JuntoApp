@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
@@ -46,6 +47,50 @@ import 'package:projeto_encontros_aplicativo_web/funcionalidades/publicacoes/mod
 import 'package:projeto_encontros_aplicativo_web/inicializacao/aplicativo.dart';
 
 void main() {
+  test('repositorio deve enviar somente celular e PIN na autenticacao',
+      () async {
+    AdaptadorHttpFalso adaptador = AdaptadorHttpFalso();
+    Dio cliente = Dio()..httpClientAdapter = adaptador;
+    RepositorioDeAutenticacao repositorio = RepositorioDeAutenticacao(cliente);
+
+    await repositorio.autentiqueAsync(
+      numeroDeCelular: '62999998888',
+      pin: '123456',
+    );
+
+    Map<String, dynamic> dados =
+        Map<String, dynamic>.from(adaptador.ultimaRequisicao!.data as Map);
+    expect(dados, <String, String>{
+      'numeroDeCelular': '62999998888',
+      'pin': '123456',
+    });
+    expect(dados.containsKey('email'), isFalse);
+    expect(dados.containsKey('senha'), isFalse);
+  });
+
+  test('repositorio deve enviar somente nome celular e PIN no cadastro',
+      () async {
+    AdaptadorHttpFalso adaptador = AdaptadorHttpFalso();
+    Dio cliente = Dio()..httpClientAdapter = adaptador;
+    RepositorioDeAutenticacao repositorio = RepositorioDeAutenticacao(cliente);
+
+    await repositorio.cadastreAsync(
+      nome: 'Pessoa Teste',
+      numeroDeCelular: '62999998888',
+      pin: '123456',
+    );
+
+    Map<String, dynamic> dados =
+        Map<String, dynamic>.from(adaptador.ultimaRequisicao!.data as Map);
+    expect(dados, <String, String>{
+      'nome': 'Pessoa Teste',
+      'numeroDeCelular': '62999998888',
+      'pin': '123456',
+    });
+    expect(dados.containsKey('email'), isFalse);
+    expect(dados.containsKey('senha'), isFalse);
+  });
+
   testWidgets('deve abrir a entrada quando nao houver sessao', (
     WidgetTester testador,
   ) async {
@@ -70,23 +115,62 @@ void main() {
     await testador.pumpAndSettle();
 
     await testador.enterText(
-      find.widgetWithText(TextFormField, 'E-mail'),
-      'pessoa@email.com',
+      find.widgetWithText(TextFormField, 'Celular'),
+      '(62) 99999-8888',
     );
     await testador.enterText(
-      find.widgetWithText(TextFormField, 'Senha'),
-      'senha-segura',
+      find.widgetWithText(TextFormField, 'PIN de 6 dígitos'),
+      '123456',
     );
+    Finder formularioDoCelular = find.widgetWithText(TextFormField, 'Celular');
+    Finder formularioDoPin =
+        find.widgetWithText(TextFormField, 'PIN de 6 dígitos');
+    TextField campoDoCelular = testador.widget(
+      find.descendant(
+          of: formularioDoCelular, matching: find.byType(TextField)),
+    );
+    TextField campoDoPin = testador.widget(
+      find.descendant(of: formularioDoPin, matching: find.byType(TextField)),
+    );
+    expect(campoDoCelular.keyboardType, TextInputType.phone);
+    expect(campoDoPin.keyboardType, TextInputType.number);
+    expect(campoDoPin.obscureText, isTrue);
     Finder botaoDeEntrada = find.widgetWithText(FilledButton, 'Entrar');
     await testador.ensureVisible(botaoDeEntrada);
     await testador.pumpAndSettle();
     await testador.tap(botaoDeEntrada);
     await testador.pumpAndSettle();
 
-    expect(repositorio.emailDoUltimoLogin, 'pessoa@email.com');
+    expect(repositorio.numeroDeCelularDoUltimoLogin, '(62) 99999-8888');
+    expect(repositorio.pinDoUltimoLogin, '123456');
     expect(find.text('Próximo encontro'), findsOneWidget);
     expect(find.text('Olá, Pessoa'), findsOneWidget);
     expect(find.text('Café de domingo'), findsOneWidget);
+  });
+
+  testWidgets('deve exigir PIN numerico com seis digitos', (
+    WidgetTester testador,
+  ) async {
+    RepositorioDeAutenticacaoFalso repositorio =
+        RepositorioDeAutenticacaoFalso();
+
+    await testador.pumpWidget(_crieAplicativo(repositorio));
+    await testador.pumpAndSettle();
+    await testador.enterText(
+      find.widgetWithText(TextFormField, 'Celular'),
+      '62999998888',
+    );
+    await testador.enterText(
+      find.widgetWithText(TextFormField, 'PIN de 6 dígitos'),
+      '12345',
+    );
+    await testador.tap(find.widgetWithText(FilledButton, 'Entrar'));
+    await testador.pumpAndSettle();
+
+    expect(find.text('O PIN deve ter exatamente 6 dígitos.'), findsOneWidget);
+    expect(repositorio.numeroDeCelularDoUltimoLogin, isNull);
+    expect(find.text('E-mail'), findsNothing);
+    expect(find.text('Senha'), findsNothing);
   });
 
   testWidgets('deve restaurar sessao existente ao iniciar', (
@@ -116,7 +200,7 @@ void main() {
     expect(find.byKey(const Key('dados-do-perfil')), findsOneWidget);
     expect(find.byKey(const Key('foto-do-usuario-no-perfil')), findsOneWidget);
     expect(find.text('Pessoa Teste'), findsOneWidget);
-    expect(find.text('pessoa@email.com'), findsOneWidget);
+    expect(find.text('+5562999998888'), findsOneWidget);
   });
 
   testWidgets('deve listar, buscar e abrir uma pessoa conhecida', (
@@ -459,12 +543,12 @@ void main() {
       'Pessoa Teste',
     );
     await testador.enterText(
-      find.widgetWithText(TextFormField, 'E-mail'),
-      'nova@email.com',
+      find.widgetWithText(TextFormField, 'Celular'),
+      '(64) 99999-7777',
     );
     await testador.enterText(
-      find.widgetWithText(TextFormField, 'Senha'),
-      'senha-segura',
+      find.widgetWithText(TextFormField, 'PIN de 6 dígitos'),
+      '654321',
     );
     Finder botaoDeCadastro = find.widgetWithText(FilledButton, 'Criar conta');
     await testador.ensureVisible(botaoDeCadastro);
@@ -472,7 +556,8 @@ void main() {
     await testador.tap(botaoDeCadastro);
     await testador.pumpAndSettle();
 
-    expect(repositorio.emailDoUltimoCadastro, 'nova@email.com');
+    expect(repositorio.numeroDeCelularDoUltimoCadastro, '(64) 99999-7777');
+    expect(repositorio.pinDoUltimoCadastro, '654321');
     expect(
       find.text('Conta criada. Agora entre com seus dados.'),
       findsOneWidget,
@@ -3630,7 +3715,7 @@ class RepositorioDaPaginaInicialFalso implements IRepositorioDaPaginaInicial {
     return UsuarioAtual(
       identificador: 'usuario-1',
       nome: 'Pessoa Teste',
-      email: 'pessoa@email.com',
+      numeroDeCelular: '+5562999998888',
       urlDaFotoDePerfil: urlDaFotoDePerfil,
     );
   }
@@ -3651,7 +3736,7 @@ class RepositorioDoPerfilFalso
     return UsuarioAtual(
       identificador: 'usuario-1',
       nome: nome,
-      email: 'pessoa@email.com',
+      numeroDeCelular: '+5562999998888',
     );
   }
 
@@ -3668,7 +3753,7 @@ class RepositorioDoPerfilFalso
     return const UsuarioAtual(
       identificador: 'usuario-1',
       nome: 'Pessoa Teste',
-      email: 'pessoa@email.com',
+      numeroDeCelular: '+5562999998888',
       urlDaFotoDePerfil: url,
     );
   }
@@ -3681,7 +3766,7 @@ class RepositorioDoPerfilFalso
     return const UsuarioAtual(
       identificador: 'usuario-1',
       nome: 'Pessoa Teste',
-      email: 'pessoa@email.com',
+      numeroDeCelular: '+5562999998888',
     );
   }
 }
@@ -3692,25 +3777,29 @@ class RepositorioDeAutenticacaoFalso implements IRepositorioDeAutenticacao {
   });
 
   final bool sessaoPodeSerRestaurada;
-  String? emailDoUltimoLogin;
-  String? emailDoUltimoCadastro;
+  String? numeroDeCelularDoUltimoLogin;
+  String? pinDoUltimoLogin;
+  String? numeroDeCelularDoUltimoCadastro;
+  String? pinDoUltimoCadastro;
 
   @override
   Future<RespostaDeSessao> autentiqueAsync({
-    required String email,
-    required String senha,
+    required String numeroDeCelular,
+    required String pin,
   }) async {
-    emailDoUltimoLogin = email;
+    numeroDeCelularDoUltimoLogin = numeroDeCelular;
+    pinDoUltimoLogin = pin;
     return _crieRespostaDeSessao();
   }
 
   @override
   Future<void> cadastreAsync({
     required String nome,
-    required String email,
-    required String senha,
+    required String numeroDeCelular,
+    required String pin,
   }) async {
-    emailDoUltimoCadastro = email;
+    numeroDeCelularDoUltimoCadastro = numeroDeCelular;
+    pinDoUltimoCadastro = pin;
   }
 
   @override
@@ -3733,5 +3822,36 @@ class RepositorioDeAutenticacaoFalso implements IRepositorioDeAutenticacao {
       tokenDeAcesso: 'token-de-teste',
       expiraEm: DateTime.now().add(const Duration(minutes: 15)),
     );
+  }
+}
+
+class AdaptadorHttpFalso implements HttpClientAdapter {
+  RequestOptions? ultimaRequisicao;
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    ultimaRequisicao = options;
+
+    if (options.path.endsWith('/navegador/login')) {
+      return ResponseBody.fromString(
+        jsonEncode(<String, dynamic>{
+          'tokenDeAcesso': 'token-de-teste',
+          'expiraEm': '2026-09-28T13:00:00Z',
+        }),
+        200,
+        headers: <String, List<String>>{
+          Headers.contentTypeHeader: <String>[Headers.jsonContentType],
+        },
+      );
+    }
+
+    return ResponseBody.fromString('', 201);
   }
 }

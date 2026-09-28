@@ -6,14 +6,14 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/erros/excecao_da_
 
 abstract interface class IRepositorioDeAutenticacao {
   Future<RespostaDeSessao> autentiqueAsync({
-    required String email,
-    required String senha,
+    required String numeroDeCelular,
+    required String pin,
   });
 
   Future<void> cadastreAsync({
     required String nome,
-    required String email,
-    required String senha,
+    required String numeroDeCelular,
+    required String pin,
   });
 
   Future<RespostaDeSessao> renoveSessaoAsync();
@@ -33,13 +33,16 @@ class RepositorioDeAutenticacao implements IRepositorioDeAutenticacao {
 
   @override
   Future<RespostaDeSessao> autentiqueAsync({
-    required String email,
-    required String senha,
+    required String numeroDeCelular,
+    required String pin,
   }) async {
     try {
       Response<dynamic> resposta = await _clienteHttp.post<dynamic>(
         '/api/autenticacao/navegador/login',
-        data: <String, String>{'email': email, 'senha': senha},
+        data: <String, String>{
+          'numeroDeCelular': numeroDeCelular,
+          'pin': pin,
+        },
       );
 
       return RespostaDeSessao.deJson(
@@ -53,16 +56,16 @@ class RepositorioDeAutenticacao implements IRepositorioDeAutenticacao {
   @override
   Future<void> cadastreAsync({
     required String nome,
-    required String email,
-    required String senha,
+    required String numeroDeCelular,
+    required String pin,
   }) async {
     try {
       await _clienteHttp.post<dynamic>(
         '/api/autenticacao/cadastro',
         data: <String, String>{
           'nome': nome,
-          'email': email,
-          'senha': senha,
+          'numeroDeCelular': numeroDeCelular,
+          'pin': pin,
         },
       );
     } on DioException catch (excecao) {
