@@ -33,7 +33,7 @@
 
 ---
 
-### Tarefa 1: Identidade de dominio por celular e PIN
+### Task 1: Identidade de dominio por celular e PIN
 
 **Arquivos:**
 - Criar: `src/ProjetoEncontros.Dominio/Usuarios/NumeroDeCelular.cs`
@@ -79,7 +79,7 @@ Esperado: todos aprovados.
 
 Commit: `feat: adiciona identidade por celular e PIN`
 
-### Tarefa 2: Cadastro e autenticacao por celular
+### Task 2: Cadastro e autenticacao por celular
 
 **Arquivos:**
 - Criar: `src/ProjetoEncontros.Aplicacao/Usuarios/Interfaces/IServicoDeHashDePin.cs`
@@ -137,7 +137,7 @@ Esperado: todos aprovados.
 
 Commit: `feat: autentica usuarios com celular e PIN`
 
-### Tarefa 3: Alteracao e recuperacao de acesso
+### Task 3: Alteracao e recuperacao de acesso
 
 **Arquivos:**
 - Criar: `src/ProjetoEncontros.Aplicacao/Usuarios/Contratos/AltereNumeroDeCelularComando.cs`
@@ -185,7 +185,7 @@ Esperado: todos aprovados.
 
 Commit: `feat: permite recuperar acesso sem perder o perfil`
 
-### Tarefa 4: Persistencia, API e protecao contra tentativas
+### Task 4: Persistencia, API e protecao contra tentativas
 
 **Arquivos:**
 - Criar: `src/ProjetoEncontros.Infraestrutura/Seguranca/ServicoDeHashDePin.cs`
@@ -247,7 +247,7 @@ Esperado: todos aprovados.
 
 Commit: `feat: expoe acesso seguro por celular na API`
 
-### Tarefa 5: Entrada e cadastro no Flutter Web
+### Task 5: Entrada e cadastro no Flutter Web
 
 **Arquivos:**
 - Modificar: `src/ProjetoEncontros.AplicativoWeb/lib/compartilhado/autenticacao/repositorio_de_autenticacao.dart`
@@ -287,7 +287,7 @@ Esperado: ambos concluem sem falhas.
 
 Commit: `feat: simplifica entrada com celular e PIN`
 
-### Tarefa 6: Navegacao minima do novo produto
+### Task 6: Navegacao minima do novo produto
 
 **Arquivos:**
 - Modificar: `src/ProjetoEncontros.AplicativoWeb/lib/compartilhado/navegacao/estrutura_com_navegacao.dart`
@@ -330,7 +330,7 @@ Esperado: todos concluem sem falhas.
 
 Commit: `refactor: reduz JuntoApp ao novo nucleo navegavel`
 
-### Tarefa 7: Verificacao integrada da primeira etapa
+### Task 7: Verificacao integrada da primeira etapa
 
 **Arquivos:**
 - Modificar: `tests/ProjetoEncontros.TestesNavegador/testes/sessao_e_encontro.spec.js` e renomear para `sessao_e_navegacao.spec.js`
