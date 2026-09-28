@@ -10,7 +10,7 @@ namespace ProjetoEncontros.Aplicacao.Autenticacao.CasosDeUso;
 public sealed class AutenticacaoDeUsuario(
     IRepositorioDeUsuarios repositorioDeUsuarios,
     IRepositorioDeTokensDeAtualizacao repositorioDeTokensDeAtualizacao,
-    IServicoDeHashDeSenha servicoDeHashDeSenha,
+    IServicoDeHashDePin servicoDeHashDePin,
     IGeradorDeTokenDeAcesso geradorDeTokenDeAcesso,
     IGeradorDeTokenDeAtualizacao geradorDeTokenDeAtualizacao,
     IRelogio relogio,
@@ -23,19 +23,21 @@ public sealed class AutenticacaoDeUsuario(
     {
         ValideComando(comando);
 
-        Email email = Email.Crie(comando.Email);
-        Usuario? usuario = await repositorioDeUsuarios.ObtenhaPorEmailAsync(email, cancellationToken);
+        NumeroDeCelular numeroDeCelular = NumeroDeCelular.Crie(comando.NumeroDeCelular);
+        Usuario? usuario = await repositorioDeUsuarios.ObtenhaPorNumeroDeCelularAsync(
+            numeroDeCelular,
+            cancellationToken);
 
-        if (usuario is null || !usuario.EstaAtivo)
+        if (usuario is null || !usuario.EstaAtivo || string.IsNullOrWhiteSpace(usuario.HashDoPin))
         {
-            throw new ExcecaoDeAplicacaoException("E-mail ou senha inválidos.");
+            throw new ExcecaoDeAplicacaoException("Celular ou PIN invalidos.");
         }
 
-        bool senhaEstaCorreta = servicoDeHashDeSenha.Verifique(comando.Senha, usuario.HashDaSenha);
+        bool pinEstaCorreto = servicoDeHashDePin.Verifique(comando.Pin, usuario.HashDoPin);
 
-        if (!senhaEstaCorreta)
+        if (!pinEstaCorreto)
         {
-            throw new ExcecaoDeAplicacaoException("E-mail ou senha inválidos.");
+            throw new ExcecaoDeAplicacaoException("Celular ou PIN invalidos.");
         }
 
         DateTimeOffset criadoEm = relogio.Agora;
@@ -65,14 +67,14 @@ public sealed class AutenticacaoDeUsuario(
 
     private static void ValideComando(AutentiqueUsuarioComando comando)
     {
-        if (string.IsNullOrWhiteSpace(comando.Email))
+        if (string.IsNullOrWhiteSpace(comando.NumeroDeCelular))
         {
-            throw new ExcecaoDeAplicacaoException("O e-mail é obrigatório.");
+            throw new ExcecaoDeAplicacaoException("O celular e obrigatorio.");
         }
 
-        if (string.IsNullOrWhiteSpace(comando.Senha))
+        if (string.IsNullOrWhiteSpace(comando.Pin))
         {
-            throw new ExcecaoDeAplicacaoException("A senha é obrigatória.");
+            throw new ExcecaoDeAplicacaoException("O PIN e obrigatorio.");
         }
     }
 }

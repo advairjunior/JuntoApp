@@ -5,7 +5,7 @@ using ProjetoEncontros.Dominio.Usuarios;
 
 namespace ProjetoEncontros.Aplicacao.Usuarios.CasosDeUso;
 
-public sealed class CadastroDeUsuario(IRepositorioDeUsuarios repositorioDeUsuarios, IServicoDeHashDeSenha servicoDeHashDeSenha, IUnidadeDeTrabalho unidadeDeTrabalho)
+public sealed class CadastroDeUsuario(IRepositorioDeUsuarios repositorioDeUsuarios, IServicoDeHashDePin servicoDeHashDePin, IUnidadeDeTrabalho unidadeDeTrabalho)
 {
     public async Task<UsuarioCadastradoResposta> CadastreAsync(
         CadastreUsuarioComando comando,
@@ -13,22 +13,32 @@ public sealed class CadastroDeUsuario(IRepositorioDeUsuarios repositorioDeUsuari
     {
         ValideComando(comando);
 
-        Email email = Email.Crie(comando.Email);
+        NumeroDeCelular numeroDeCelular = NumeroDeCelular.Crie(comando.NumeroDeCelular);
 
-        bool emailJaExiste = await repositorioDeUsuarios.ExisteComEmailAsync(email, cancellationToken);
+        bool numeroJaExiste = await repositorioDeUsuarios.ExisteComNumeroDeCelularAsync(numeroDeCelular, cancellationToken);
 
-        if (emailJaExiste)
+        if (numeroJaExiste)
         {
-            throw new ExcecaoDeAplicacaoException("Já existe usuário cadastrado com este e-mail.");
+            throw new ExcecaoDeAplicacaoException("Ja existe usuario cadastrado com este celular.");
         }
 
-        string hashDaSenha = servicoDeHashDeSenha.GereHash(comando.Senha);
-        Usuario usuario = Usuario.Crie(Guid.NewGuid(), comando.Nome, email, hashDaSenha, DateTimeOffset.UtcNow);
+        bool existeAlgumUsuario = await repositorioDeUsuarios.ExisteAlgumAsync(cancellationToken);
+        PapelDoUsuario papel = existeAlgumUsuario
+            ? PapelDoUsuario.Pessoa
+            : PapelDoUsuario.AdministradorDoSistema;
+        string hashDoPin = servicoDeHashDePin.GereHash(comando.Pin);
+        Usuario usuario = Usuario.CrieComCelularEPin(
+            Guid.NewGuid(),
+            comando.Nome,
+            numeroDeCelular,
+            hashDoPin,
+            papel,
+            DateTimeOffset.UtcNow);
 
         await repositorioDeUsuarios.AdicioneAsync(usuario, cancellationToken);
         await unidadeDeTrabalho.SalveAlteracoesAsync(cancellationToken);
 
-        return new(usuario.Identificador, usuario.Nome, usuario.Email.Valor);
+        return new(usuario.Identificador, usuario.Nome, numeroDeCelular.Valor);
     }
 
     private static void ValideComando(CadastreUsuarioComando comando)
@@ -38,24 +48,19 @@ public sealed class CadastroDeUsuario(IRepositorioDeUsuarios repositorioDeUsuari
             throw new ExcecaoDeAplicacaoException("O nome é obrigatório.");
         }
 
-        if (string.IsNullOrWhiteSpace(comando.Email))
+        if (string.IsNullOrWhiteSpace(comando.NumeroDeCelular))
         {
-            throw new ExcecaoDeAplicacaoException("O e-mail é obrigatório.");
+            throw new ExcecaoDeAplicacaoException("O celular e obrigatorio.");
         }
 
-        if (string.IsNullOrWhiteSpace(comando.Senha))
+        if (string.IsNullOrWhiteSpace(comando.Pin))
         {
-            throw new ExcecaoDeAplicacaoException("A senha é obrigatória.");
+            throw new ExcecaoDeAplicacaoException("O PIN e obrigatorio.");
         }
 
-        if (comando.Senha.Length < 8)
+        if (comando.Pin.Length != 6 || !comando.Pin.All(char.IsAsciiDigit))
         {
-            throw new ExcecaoDeAplicacaoException("A senha deve possuir pelo menos 8 caracteres.");
-        }
-
-        if (comando.Senha.Length > 100)
-        {
-            throw new ExcecaoDeAplicacaoException("A senha não pode ultrapassar 100 caracteres.");
+            throw new ExcecaoDeAplicacaoException("O PIN deve possuir exatamente 6 algarismos.");
         }
     }
 }

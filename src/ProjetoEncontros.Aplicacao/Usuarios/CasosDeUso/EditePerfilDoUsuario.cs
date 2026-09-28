@@ -21,8 +21,9 @@ public sealed class EditePerfilDoUsuario(
         return new(
             usuario.Identificador,
             usuario.Nome,
-            usuario.Email.Valor,
-            usuario.UrlDaFotoDePerfil);
+            ObtenhaNumeroDeCelular(usuario),
+            usuario.UrlDaFotoDePerfil,
+            usuario.Papel);
     }
 
     private async Task<Usuario> ObtenhaUsuarioAsync(Guid identificadorDoUsuario, CancellationToken cancellationToken)
@@ -42,5 +43,15 @@ public sealed class EditePerfilDoUsuario(
         }
 
         return usuario;
+    }
+
+    private static string ObtenhaNumeroDeCelular(Usuario usuario)
+    {
+        if (usuario.NumeroDeCelular is null)
+        {
+            throw new ExcecaoDeAplicacaoException("O usuario atual ainda nao possui celular cadastrado.");
+        }
+
+        return usuario.NumeroDeCelular.Valor;
     }
 }

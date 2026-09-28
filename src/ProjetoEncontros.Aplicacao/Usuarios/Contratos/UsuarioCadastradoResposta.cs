@@ -1,3 +1,3 @@
 namespace ProjetoEncontros.Aplicacao.Usuarios.Contratos;
 
-public sealed record UsuarioCadastradoResposta(Guid Identificador, string Nome, string Email);
+public sealed record UsuarioCadastradoResposta(Guid Identificador, string Nome, string NumeroDeCelular);

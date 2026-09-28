@@ -1,3 +1,3 @@
 namespace ProjetoEncontros.Aplicacao.Autenticacao.Contratos;
 
-public sealed record AutentiqueUsuarioComando(string Email, string Senha);
+public sealed record AutentiqueUsuarioComando(string NumeroDeCelular, string Pin);
