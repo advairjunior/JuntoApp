@@ -61,15 +61,6 @@ await MigreBancoEmDesenvolvimentoAsync(aplicacao);
 aplicacao.UseConfiguracaoDaApi();
 RotasDeAutenticacao.MapeieRotasDeAutenticacao(aplicacao);
 RotasDeUsuarios.MapeieRotasDeUsuarios(aplicacao);
-RotasDeGrupos.MapeieRotasDeGrupos(aplicacao);
-RotasDeConvites.MapeieRotasDeConvites(aplicacao);
-RotasDeMembros.MapeieRotasDeMembros(aplicacao);
-RotasDeEncontros.MapeieRotasDeEncontros(aplicacao);
-RotasDeConvitesDoEncontroPorLink.MapeieRotasDeConvitesDoEncontroPorLink(aplicacao);
-RotasDeLocalizacoes.MapeieRotasDeLocalizacoes(aplicacao);
-RotasDeLinhaDoTempo.MapeieRotasDeLinhaDoTempo(aplicacao);
-RotasDeNotificacoes.MapeieRotasDeNotificacoes(aplicacao);
-RotasDePessoasFrequentes.MapeieRotasDePessoasFrequentes(aplicacao);
 aplicacao.MapeieAplicativoWeb();
 
 aplicacao.Run();

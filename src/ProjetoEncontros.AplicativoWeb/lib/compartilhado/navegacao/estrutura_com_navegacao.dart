@@ -19,11 +19,11 @@ class EstruturaComNavegacao extends StatelessWidget {
   final Widget filho;
 
   int get _indiceSelecionado {
-    if (caminhoAtual.startsWith('/pessoas')) {
+    if (caminhoAtual.startsWith('/grupos')) {
       return 1;
     }
 
-    if (caminhoAtual.startsWith('/memorias')) {
+    if (caminhoAtual.startsWith('/pessoas')) {
       return 2;
     }
 
@@ -76,8 +76,8 @@ class EstruturaComNavegacao extends StatelessWidget {
   void _navegue(BuildContext context, int indice) {
     String destino = switch (indice) {
       0 => '/inicio',
-      1 => '/pessoas',
-      2 => '/memorias',
+      1 => '/grupos',
+      2 => '/pessoas',
       _ => '/perfil',
     };
 
@@ -127,16 +127,16 @@ class _DockDeNavegacao extends StatelessWidget {
                     aoTocar: () => aoSelecionar(0),
                   ),
                   _ItemDoDock(
-                    rotulo: 'Pessoas',
-                    icone: Icons.people_outline_rounded,
-                    iconeSelecionado: Icons.people_rounded,
+                    rotulo: 'Grupos',
+                    icone: Icons.groups_outlined,
+                    iconeSelecionado: Icons.groups_rounded,
                     selecionado: indiceSelecionado == 1,
                     aoTocar: () => aoSelecionar(1),
                   ),
                   _ItemDoDock(
-                    rotulo: 'Memórias',
-                    icone: Icons.photo_library_outlined,
-                    iconeSelecionado: Icons.photo_library_rounded,
+                    rotulo: 'Pessoas',
+                    icone: Icons.people_outline_rounded,
+                    iconeSelecionado: Icons.people_rounded,
                     selecionado: indiceSelecionado == 2,
                     aoTocar: () => aoSelecionar(2),
                   ),
@@ -180,6 +180,7 @@ class _ItemDoDock extends StatelessWidget {
 
     return Expanded(
       child: Semantics(
+        key: Key('dock-${rotulo.toLowerCase()}'),
         button: true,
         selected: selecionado,
         label: rotulo,

@@ -20,6 +20,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="TestesDeApi.cs" />
+    <Compile Remove="TestesDeConvitesDoEncontroPorLink.cs" />
+    <Compile Remove="TestesDePapeisAdministrativosDoEncontro.cs" />
+    <Compile Remove="TestesDoContadorDeNovidades.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Include="Recursos\aplicativo-web\index.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

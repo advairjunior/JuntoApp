@@ -5,8 +5,8 @@ import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/conte
 import 'package:projeto_encontros_aplicativo_web/compartilhado/componentes/estado_vazio.dart';
 import 'package:projeto_encontros_aplicativo_web/compartilhado/tema/espacamentos_do_aplicativo.dart';
 
-class TelaInicial extends StatelessWidget {
-  const TelaInicial({super.key});
+class TelaDeGrupos extends StatelessWidget {
+  const TelaDeGrupos({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -21,19 +21,19 @@ class TelaInicial extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           CabecalhoDaPagina(
-            titulo: 'Início',
-            subtitulo: 'Um resumo simples do que vocês viveram juntos.',
+            titulo: 'Grupos',
+            subtitulo: 'Os círculos de amizade que dão origem aos encontros.',
           ),
           SizedBox(height: EspacamentosDoAplicativo.extraGrande),
           Expanded(
             child: Center(
               child: CartaoDoAplicativo(
                 filho: EstadoVazio(
-                  icone: Icons.event_available_outlined,
-                  titulo: 'Seus encontros aparecerão aqui',
+                  icone: Icons.groups_outlined,
+                  titulo: 'Seus grupos aparecerão aqui',
                   descricao:
-                      'Quando um encontro for criado ou reconhecido em um '
-                      'grupo, você verá os registros mais recentes neste espaço.',
+                      'Na próxima etapa você poderá criar um grupo ou importar '
+                      'o histórico de uma conversa do WhatsApp.',
                 ),
               ),
             ),
