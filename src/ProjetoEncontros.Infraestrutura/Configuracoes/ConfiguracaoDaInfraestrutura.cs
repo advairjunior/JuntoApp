@@ -63,6 +63,7 @@ public static class ConfiguracaoDaInfraestrutura
         AdicioneArmazenamento(servicos, configuracao, nomeDoAmbiente);
         servicos.AddSingleton<IServicoDeBuscaDeLocalizacao, ServicoDeBuscaDeLocalizacao>();
         servicos.AddScoped<IServicoDeHashDeSenha, ServicoDeHashDeSenha>();
+        servicos.AddScoped<IServicoDeHashDePin, ServicoDeHashDePin>();
         servicos.AddScoped<IGeradorDeTokenDeAcesso, GeradorDeTokenDeAcesso>();
         servicos.AddScoped<IGeradorDeTokenDeAtualizacao, GeradorDeTokenDeAtualizacao>();
         servicos.AddSingleton<IGeradorDeTokenDeConvitePorLink, GeradorDeTokenDeConvitePorLink>();

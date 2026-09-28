@@ -8,6 +8,8 @@ public sealed class TestesDeAutenticacaoDoNavegador(FabricaDaApi fabricaDaApi)
     : IClassFixture<FabricaDaApi>
 {
     private const string OrigemDoAplicativoWeb = "http://127.0.0.1:5391";
+    private const string NumeroDeCelular = "62999998888";
+    private const string Pin = "123456";
     private static readonly JsonSerializerOptions OpcoesDeJson = new()
     {
         PropertyNameCaseInsensitive = true
@@ -22,7 +24,7 @@ public sealed class TestesDeAutenticacaoDoNavegador(FabricaDaApi fabricaDaApi)
 
         HttpResponseMessage resposta = await cliente.PostAsJsonAsync(
             "/api/autenticacao/navegador/login",
-            new RequisicaoDeLogin("pessoa.web@email.com", "senha-segura"));
+            new RequisicaoDeLogin(NumeroDeCelular, Pin));
 
         Assert.Equal(HttpStatusCode.OK, resposta.StatusCode);
         string corpo = await resposta.Content.ReadAsStringAsync();
@@ -54,7 +56,7 @@ public sealed class TestesDeAutenticacaoDoNavegador(FabricaDaApi fabricaDaApi)
 
         HttpResponseMessage respostaDeLogin = await cliente.PostAsJsonAsync(
             "/api/autenticacao/navegador/login",
-            new RequisicaoDeLogin("pessoa.web@email.com", "senha-segura"));
+            new RequisicaoDeLogin(NumeroDeCelular, Pin));
         string cookieDoLogin = ObtenhaValorDoCookie(respostaDeLogin);
 
         using HttpRequestMessage requisicaoDeRenovacao = new(
@@ -103,7 +105,7 @@ public sealed class TestesDeAutenticacaoDoNavegador(FabricaDaApi fabricaDaApi)
 
         HttpResponseMessage respostaDeLogin = await cliente.PostAsJsonAsync(
             "/api/autenticacao/navegador/login",
-            new RequisicaoDeLogin("pessoa.web@email.com", "senha-segura"));
+            new RequisicaoDeLogin(NumeroDeCelular, Pin));
         string cookieDoLogin = ObtenhaValorDoCookie(respostaDeLogin);
 
         using HttpRequestMessage requisicaoDeSaida = new(
@@ -169,9 +171,13 @@ public sealed class TestesDeAutenticacaoDoNavegador(FabricaDaApi fabricaDaApi)
             "/api/autenticacao/cadastro",
             new RequisicaoDeCadastro(
                 "Pessoa Web",
-                "pessoa.web@email.com",
-                "senha-segura"));
+                "(62) 99999-8888",
+                Pin));
         Assert.Equal(HttpStatusCode.Created, resposta.StatusCode);
+        string corpo = await resposta.Content.ReadAsStringAsync();
+        Assert.Contains("+5562999998888", corpo);
+        Assert.DoesNotContain("email", corpo, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("hash", corpo, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ObtenhaCabecalhoDoCookie(HttpResponseMessage resposta)
@@ -192,10 +198,10 @@ public sealed class TestesDeAutenticacaoDoNavegador(FabricaDaApi fabricaDaApi)
 
     private sealed record RequisicaoDeCadastro(
         string Nome,
-        string Email,
-        string Senha);
+        string NumeroDeCelular,
+        string Pin);
 
-    private sealed record RequisicaoDeLogin(string Email, string Senha);
+    private sealed record RequisicaoDeLogin(string NumeroDeCelular, string Pin);
 
     private sealed record RespostaDeSessaoDoNavegador(
         string TokenDeAcesso,

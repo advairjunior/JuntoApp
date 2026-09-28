@@ -1,3 +1,3 @@
 namespace ProjetoEncontros.Api.Contratos.Autenticacao;
 
-public sealed record RequisicaoDeLogin(string Email, string Senha);
+public sealed record RequisicaoDeLogin(string NumeroDeCelular, string Pin);

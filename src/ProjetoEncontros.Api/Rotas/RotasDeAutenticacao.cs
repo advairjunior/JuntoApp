@@ -15,11 +15,13 @@ public static class RotasDeAutenticacao
                                            .WithTags("Autenticacao");
 
         grupo.MapPost("/cadastro", CadastreUsuarioAsync)
+             .RequireRateLimiting("Entrada")
              .WithName("CadastreUsuario")
              .Produces<RespostaDeCadastro>(StatusCodes.Status201Created)
              .Produces(StatusCodes.Status400BadRequest);
 
         grupo.MapPost("/login", AutentiqueUsuarioAsync)
+             .RequireRateLimiting("Entrada")
              .WithName("AutentiqueUsuario")
              .Produces<RespostaDeLogin>(StatusCodes.Status200OK)
              .Produces(StatusCodes.Status400BadRequest);
@@ -37,6 +39,7 @@ public static class RotasDeAutenticacao
         RouteGroupBuilder navegador = grupo.MapGroup("/navegador");
 
         navegador.MapPost("/login", AutentiqueUsuarioDoNavegadorAsync)
+                 .RequireRateLimiting("Entrada")
                  .WithName("AutentiqueUsuarioDoNavegador")
                  .Produces<RespostaDeSessaoDoNavegador>(StatusCodes.Status200OK)
                  .Produces(StatusCodes.Status400BadRequest);
@@ -53,18 +56,24 @@ public static class RotasDeAutenticacao
 
     private static async Task<IResult> CadastreUsuarioAsync(RequisicaoDeCadastro requisicao, CadastroDeUsuario cadastroDeUsuario, CancellationToken cancellationToken)
     {
-        CadastreUsuarioComando comando = new(requisicao.Nome, requisicao.Email, requisicao.Senha);
+        CadastreUsuarioComando comando = new(
+            requisicao.Nome,
+            requisicao.NumeroDeCelular,
+            requisicao.Pin);
 
         UsuarioCadastradoResposta usuarioCadastrado = await cadastroDeUsuario.CadastreAsync(comando, cancellationToken);
 
-        RespostaDeCadastro resposta = new(usuarioCadastrado.Identificador, usuarioCadastrado.Nome, usuarioCadastrado.Email);
+        RespostaDeCadastro resposta = new(
+            usuarioCadastrado.Identificador,
+            usuarioCadastrado.Nome,
+            usuarioCadastrado.NumeroDeCelular);
 
         return Results.Created($"/api/usuarios/{resposta.Identificador}", resposta);
     }
 
     private static async Task<IResult> AutentiqueUsuarioAsync(RequisicaoDeLogin requisicao, AutenticacaoDeUsuario autenticacaoDeUsuario, CancellationToken cancellationToken)
     {
-        AutentiqueUsuarioComando comando = new(requisicao.Email, requisicao.Senha);
+        AutentiqueUsuarioComando comando = new(requisicao.NumeroDeCelular, requisicao.Pin);
 
         SessaoCriadaResposta sessaoCriada = await autenticacaoDeUsuario.AutentiqueAsync(comando, cancellationToken);
 
@@ -102,7 +111,7 @@ public static class RotasDeAutenticacao
     {
         DefinaCabecalhosSemCache(contexto.Response);
 
-        AutentiqueUsuarioComando comando = new(requisicao.Email, requisicao.Senha);
+        AutentiqueUsuarioComando comando = new(requisicao.NumeroDeCelular, requisicao.Pin);
         SessaoCriadaResposta sessaoCriada = await autenticacaoDeUsuario.AutentiqueAsync(
             comando,
             cancellationToken);
